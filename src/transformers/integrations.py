@@ -821,9 +821,14 @@ class NeptuneCallback(TrainerCallback):
             self.setup(args, state, model)
 
     def on_log(self, args, state, control, logs, model=None, **kwargs):
+        '''
+        I only added the line 'logs = rewrite_logs(logs)'.
+        Note that rewrite_logs() is already implemented in transformers.integrations.
+        '''
         if not self._initialized:
             self.setup(args, state, model)
         if state.is_world_process_zero:
+            logs = rewrite_logs(logs) # !!!
             for k, v in logs.items():
                 self._neptune_run[k].log(v, step=state.global_step)
 
