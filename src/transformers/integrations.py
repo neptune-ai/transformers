@@ -776,26 +776,26 @@ class NeptuneCallback(TrainerCallback):
     A [`TrainerCallback`] that sends the logs to [Neptune](https://neptune.ai).
    
     Args:
-        base_namespace: Optional, ``str``, root namespace within Neptune's run.
-          Default is "finetuning".
-        api_token: Optional, ``str``. Your Neptune API token. Read more about it in the
-          `Neptune installation docs <https://docs.neptune.ai/getting-started/installation>`_.
-        project: Optional, ``str``. Name of the project to log runs to.
-          It looks like this: "my_workspace/my_project".
-        run: Optional, pass Neptune run object if you want to continue logging
-          to the existing run (resume run).
-          Read more about it
-          `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
-        log_batch_metrics: boolean flag to log batch metrics
-            (default: SETTINGS.log_batch_metrics or False).
-        log_epoch_metrics: boolean flag to log epoch metrics
-            (default: SETTINGS.log_epoch_metrics or True).
+        api_token: Optional, `str`. Neptune API token. Read more about it in the
+            `Neptune installation docs <https://docs.neptune.ai/getting-started/installation>`_.
+        project: Optional, `str`. Name of the project.
+            It looks like this: "my_workspace/my_project".
+        name: Optional. `str`. Name of the run.
+            Run name appears in the "all metadata/sys" section in Neptune UI.
+        base_namespace: Optional, `str`, root namespace within Neptune's run.
+            Default is "finetuning".
+        run: Optional, pass Neptune run object if you want to continue logging to the existing run (resume run).
+            Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
         neptune_run_kwargs: Optional, additional keyword arguments to be passed directly to the
-          `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function.
+            `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function when 
+            the run is created.
     """
 
     def __init__(
         self, 
+        api_token=None,
+        project=None,
+        name=None,
         base_namespace="finetuning", 
         run=None, 
         log_trainer_parameters=True, 
@@ -812,28 +812,28 @@ class NeptuneCallback(TrainerCallback):
 
         self._neptune = neptune    # I'm not sure if we need to keep this.
         self._initialized = False
-        self._log_artifacts = False
+        #self._log_artifacts = False
         
-        self.base_namespace = base_namespace   
-        self.log_trainer_parameters = log_trainer_parameters
-        self.log_model_parameters = log_model_parameters
+        self._api_token = api_token
+        self._project = project
+        self._name = name
+        self._base_namespace = base_namespace   
+        self._neptune_run = run
         
-        if run is not None:
-            self._neptune_run = run
-        else:
-            ''' This version creates a neptune run already here. 
-            We could also wait till self.setup() (which in turn is called in self.on_train_begin().
-            '''
-            self._neptune_run = neptune.init(**neptune_run_kwargs) # We could also move this to setup().
+        self._log_trainer_parameters = log_trainer_parameters
+        self._log_model_parameters = log_model_parameters
 
+        self._neptune_run_kwargs = neptune_run_kwargs
+        
     def setup(self, args, state, model):
         '''
-        In contrast to the previous implementation, 
-        this version does not create a new neptune run here, 
-        because it is initialized already in __init__().
-        
-        Additionally, now model and trainer parameters are split into separate namespace. 
+        Create a Neptune run (if does not exist).
+    
+        Log model and trainer parameters, now also split them into separate namespaces. 
         '''
+        if self._neptune_run is None:
+            self._neptune_run = neptune.init(api_token=self._api_token, project=self._project, name=self._name, **self._neptune_run_kwargs) 
+
         if state.is_world_process_zero:
             #combined_dict = args.to_dict()
             if self.log_trainer_parameters:
