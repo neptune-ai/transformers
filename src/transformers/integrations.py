@@ -776,19 +776,23 @@ class NeptuneCallback(TrainerCallback):
     A [`TrainerCallback`] that sends the logs to [Neptune](https://neptune.ai).
    
     Args:
-        api_token: Optional, `str`. Neptune API token. Read more about it in the
+        api_token ('str', *optional*): 
+            Neptune API token. Read more in the 
             `Neptune installation docs <https://docs.neptune.ai/getting-started/installation>`_.
-        project: Optional, `str`. Name of the project.
-            It looks like this: "my_workspace/my_project".
-        name: Optional. `str`. Name of the run.
-            Run name appears in the "all metadata/sys" section in Neptune UI.
-        base_namespace: Optional, `str`, root namespace within Neptune's run.
-            Default is "finetuning".
-        run: Optional, pass Neptune run object if you want to continue logging to the existing run (resume run).
+        project (`str`, *optional*): 
+            Name of the project. It should look like this: "my_workspace/my_project".
+        name (`str`, *optional*):
+            Name of the run, it appears in the "all metadata/sys" section in Neptune UI.
+        base_namespace (`str`, *optional*, defaults to "finetuning"):
+            Root namespace within Neptune's run.
+        run (`Run`, *optional*):
+            Pass Neptune run object if you want to continue logging to the existing run (resume run).
             Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
-        neptune_run_kwargs: Optional, additional keyword arguments to be passed directly to the
-            `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function when 
-            the run is created.
+        **neptune_run_kwargs (*optional*):
+            Additional keyword arguments to be passed directly 
+            to the `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function 
+            when the run is created. 
+            Note that `**neptune_run_kwargs` are passed down to `neptune.init()` only if `run` is not provided.
     """
 
     def __init__(
@@ -801,16 +805,14 @@ class NeptuneCallback(TrainerCallback):
         log_trainer_parameters=True, 
         log_model_parameters=True, 
         **neptune_run_kwargs):
-        ''' 
-        Note that **neptune_run_kwargs are passed down to neptune.init(), but only if run not provided.
-        '''
+        
         if not is_neptune_available():
             raise ValueError(
                 "NeptuneCallback requires neptune-client to be installed. Run `pip install neptune-client`."
             )
         import neptune.new as neptune
 
-        self._neptune = neptune    # I'm not sure if we need to keep this.
+        self._neptune = neptune
         self._initialized = False
         #self._log_artifacts = False
         
@@ -827,22 +829,19 @@ class NeptuneCallback(TrainerCallback):
         
     def setup(self, args, state, model):
         '''
-        Create a Neptune run (if does not exist).
-    
-        Log model and trainer parameters, now also split them into separate namespaces. 
+        Setup the Neptune.ai integration.
+        
+        (1) Create a Neptune run (if does not exist).
+        (2) Log model and trainer parameters (split them into separate namespaces). 
         '''
         if self._neptune_run is None:
-            self._neptune_run = neptune.init(api_token=self._api_token, project=self._project, name=self._name, **self._neptune_run_kwargs) 
+            self._neptune_run = self._neptune.init(api_token=self._api_token, project=self._project, name=self._name, **self._neptune_run_kwargs) 
 
         if state.is_world_process_zero:
-            #combined_dict = args.to_dict()
-            if self.log_trainer_parameters:
-                self._neptune_run[self.base_namespace+"/trainer-parameters"] = args.to_dict()
-            if self.log_model_parameters and hasattr(model, "config") and model.config is not None:
-                self._neptune_run[self.base_namespace+"/model-parameters"] = model.config.to_dict()
-                #model_config = model.config.to_dict()
-                #combined_dict = {**model_config, **combined_dict}
-            #self._neptune_run[self.base_namespace+"/trainer-parameters"] = combined_dict
+            if self._log_trainer_parameters:
+                self._neptune_run[self._base_namespace+"/trainer-parameters"] = args.to_dict()
+            if self._log_model_parameters and hasattr(model, "config") and model.config is not None:
+                self._neptune_run[self._base_namespace+"/model-parameters"] = model.config.to_dict()
                 
         self._initialized = True
 
@@ -851,16 +850,11 @@ class NeptuneCallback(TrainerCallback):
             self.setup(args, state, model)
 
     def on_log(self, args, state, control, logs, model=None, **kwargs):
-        '''
-        I only added the line 'logs = rewrite_logs(logs)'.
-        Note that rewrite_logs() is already implemented in transformers.integrations.
-        '''
         if not self._initialized:
             self.setup(args, state, model)
         if state.is_world_process_zero:
-            logs = rewrite_logs(logs) # !!!
+            logs = rewrite_logs(logs) # Note that this is implemented in transformers.integrations.
             logs = self._add_base_namespace(logs)
-            
             for k, v in logs.items():
                 self._neptune_run[k].log(v, step=state.global_step)
 
@@ -892,7 +886,7 @@ class NeptuneCallback(TrainerCallback):
     def _add_base_namespace(self, d):
         new_d = {}
         for k, v in d.items():
-            new_d[self.base_namespace+"/"+k] = v
+            new_d[self._base_namespace+"/"+k] = v
         return new_d
     
 class CodeCarbonCallback(TrainerCallback):
