@@ -774,46 +774,76 @@ class MLflowCallback(TrainerCallback):
 class NeptuneCallback(TrainerCallback):
     """
     A [`TrainerCallback`] that sends the logs to [Neptune](https://neptune.ai).
+   
+    Args:
+        base_namespace: Optional, ``str``, root namespace within Neptune's run.
+          Default is "finetuning".
+        api_token: Optional, ``str``. Your Neptune API token. Read more about it in the
+          `Neptune installation docs <https://docs.neptune.ai/getting-started/installation>`_.
+        project: Optional, ``str``. Name of the project to log runs to.
+          It looks like this: "my_workspace/my_project".
+        run: Optional, pass Neptune run object if you want to continue logging
+          to the existing run (resume run).
+          Read more about it
+          `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
+        log_batch_metrics: boolean flag to log batch metrics
+            (default: SETTINGS.log_batch_metrics or False).
+        log_epoch_metrics: boolean flag to log epoch metrics
+            (default: SETTINGS.log_epoch_metrics or True).
+        neptune_run_kwargs: Optional, additional keyword arguments to be passed directly to the
+          `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function.
     """
 
-    def __init__(self):
+    def __init__(
+        self, 
+        base_namespace="finetuning", 
+        run=None, 
+        log_trainer_parameters=True, 
+        log_model_parameters=True, 
+        **neptune_run_kwargs):
+        ''' 
+        Note that **neptune_run_kwargs are passed down to neptune.init(), but only if run not provided.
+        '''
         if not is_neptune_available():
             raise ValueError(
                 "NeptuneCallback requires neptune-client to be installed. Run `pip install neptune-client`."
             )
         import neptune.new as neptune
 
-        self._neptune = neptune
+        self._neptune = neptune    # I'm not sure if we need to keep this.
         self._initialized = False
         self._log_artifacts = False
+        
+        self.base_namespace = base_namespace   
+        self.log_trainer_parameters = log_trainer_parameters
+        self.log_model_parameters = log_model_parameters
+        
+        if run is not None:
+            self._neptune_run = run
+        else:
+            ''' This version creates a neptune run already here. 
+            We could also wait till self.setup() (which in turn is called in self.on_train_begin().
+            '''
+            self._neptune_run = neptune.init(**neptune_run_kwargs) # We could also move this to setup().
 
     def setup(self, args, state, model):
-        """
-        Setup the Neptune integration.
-
-        Environment:
-            NEPTUNE_PROJECT (`str`, *required*):
-                The project ID for neptune.ai account. Should be in format *workspace_name/project_name*
-            NEPTUNE_API_TOKEN (`str`, *required*):
-                API-token for neptune.ai account
-            NEPTUNE_CONNECTION_MODE (`str`, *optional*):
-                Neptune connection mode. *async* by default
-            NEPTUNE_RUN_NAME (`str`, *optional*):
-                The name of run process on Neptune dashboard
-        """
+        '''
+        In contrast to the previous implementation, 
+        this version does not create a new neptune run here, 
+        because it is initialized already in __init__().
+        
+        Additionally, now model and trainer parameters are split into separate namespace. 
+        '''
         if state.is_world_process_zero:
-            self._neptune_run = self._neptune.init(
-                project=os.getenv("NEPTUNE_PROJECT"),
-                api_token=os.getenv("NEPTUNE_API_TOKEN"),
-                mode=os.getenv("NEPTUNE_CONNECTION_MODE", "async"),
-                name=os.getenv("NEPTUNE_RUN_NAME", None),
-                run=os.getenv("NEPTUNE_RUN_ID", None),
-            )
-            combined_dict = args.to_dict()
-            if hasattr(model, "config") and model.config is not None:
-                model_config = model.config.to_dict()
-                combined_dict = {**model_config, **combined_dict}
-            self._neptune_run["parameters"] = combined_dict
+            #combined_dict = args.to_dict()
+            if self.log_trainer_parameters:
+                self._neptune_run[self.base_namespace+"/trainer-parameters"] = args.to_dict()
+            if self.log_model_parameters and hasattr(model, "config") and model.config is not None:
+                self._neptune_run[self.base_namespace+"/model-parameters"] = model.config.to_dict()
+                #model_config = model.config.to_dict()
+                #combined_dict = {**model_config, **combined_dict}
+            #self._neptune_run[self.base_namespace+"/trainer-parameters"] = combined_dict
+                
         self._initialized = True
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
@@ -829,6 +859,8 @@ class NeptuneCallback(TrainerCallback):
             self.setup(args, state, model)
         if state.is_world_process_zero:
             logs = rewrite_logs(logs) # !!!
+            logs = self._add_base_namespace(logs)
+            
             for k, v in logs.items():
                 self._neptune_run[k].log(v, step=state.global_step)
 
@@ -846,7 +878,23 @@ class NeptuneCallback(TrainerCallback):
         except AttributeError:
             pass
 
-
+    def stop_run(self, seconds=None):
+        """
+        Stop the run.
+        
+        Args:
+            seconds (`int`, *optional*, defaults to None):
+                Number of seconds to wait for all Neptune.ai tracking calls to finish, before stopping the tracked
+                run. If not set it will wait for all tracking calls to finish.
+        """
+        self._neptune_run.stop(seconds=seconds)
+    
+    def _add_base_namespace(self, d):
+        new_d = {}
+        for k, v in d.items():
+            new_d[self.base_namespace+"/"+k] = v
+        return new_d
+    
 class CodeCarbonCallback(TrainerCallback):
     """
     A [`TrainerCallback`] that tracks the CO2 emission of training.
