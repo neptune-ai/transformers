@@ -777,10 +777,15 @@ class NeptuneCallback(TrainerCallback):
    
     Args:
         api_token ('str', *optional*): 
-            Neptune API token. Read more in the 
+            Neptune API token obtained from <https://neptune.ai> upon registration.
+            It is recommended to keep it in the `NEPTUNE_API_TOKEN` environment variable 
+            -- in this case it does not have to be provided here.
+            Read more in the 
             `Neptune installation docs <https://docs.neptune.ai/getting-started/installation>`_.
         project (`str`, *optional*): 
-            Name of the project. It should look like this: "my_workspace/my_project".
+            Name of the project. Format: "WORKSPACE/PROJECT".
+            If `None` (default), the value of `NEPTUNE_PROJECT` environment variable will be used.
+            You need to create the project in <https://neptune.ai> first.
         name (`str`, *optional*):
             Name of the run, it appears in the "all metadata/sys" section in Neptune UI.
         base_namespace (`str`, *optional*, defaults to "finetuning"):
@@ -792,13 +797,14 @@ class NeptuneCallback(TrainerCallback):
         log_checkpoints (`bool`, *optional*, defaults to False):
             If True, upload checkpoints.
         run (`Run`, *optional*):
-            Pass Neptune run object if you want to continue logging to the existing run (resume run).
-            Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
+            Pass Neptune run object if you want to continue logging to the existing run (e.g., resume a run).
+            Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_. 
+            When run object is passed you can't specify other neptune properties.
         **neptune_run_kwargs (*optional*):
             Additional keyword arguments to be passed directly 
             to the `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function 
-            when the run is created. 
-            Note that `**neptune_run_kwargs` are passed down to `neptune.init()` only if `run` is not provided.
+            when a new run is created. 
+            Note that `**neptune_run_kwargs` are passed down to `neptune.init()` only if run is not provided.
     """
 
     def __init__(
