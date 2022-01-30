@@ -804,6 +804,7 @@ class NeptuneCallback(TrainerCallback):
         run=None, 
         log_trainer_parameters=True, 
         log_model_parameters=True, 
+        log_checkpoints=False,
         **neptune_run_kwargs):
         
         if not is_neptune_available():
@@ -814,7 +815,6 @@ class NeptuneCallback(TrainerCallback):
 
         self._neptune = neptune
         self._initialized = False
-        #self._log_artifacts = False
         
         self._api_token = api_token
         self._project = project
@@ -824,7 +824,8 @@ class NeptuneCallback(TrainerCallback):
         
         self._log_trainer_parameters = log_trainer_parameters
         self._log_model_parameters = log_model_parameters
-
+        self._log_checkpoints = log_checkpoints
+        
         self._neptune_run_kwargs = neptune_run_kwargs
         
     def setup(self, args, state, model):
@@ -857,7 +858,16 @@ class NeptuneCallback(TrainerCallback):
             logs = self._add_base_namespace(logs)
             for k, v in logs.items():
                 self._neptune_run[k].log(v, step=state.global_step)
-
+                
+    def on_train_end(self, args, state, control, **kwargs):
+        if self._initialized and state.is_world_process_zero:
+            # Log checkpoints
+            if self._log_checkpoints and self._neptune_run is not None:
+                print("Logging checkpoints. This could take time.. (NOT IMPLEMENTED).")
+                # This does not work, cannot upload a directory (+this directory may contain many checkpoints, 
+                # we should probably only upload when a checkpoint is created (`on_save`) 
+                #self._neptune_run[f"model/"].upload(args.output_dir) 
+        
     def __del__(self):
         """
         Environment:
