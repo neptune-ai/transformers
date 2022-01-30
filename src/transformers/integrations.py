@@ -785,6 +785,12 @@ class NeptuneCallback(TrainerCallback):
             Name of the run, it appears in the "all metadata/sys" section in Neptune UI.
         base_namespace (`str`, *optional*, defaults to "finetuning"):
             Root namespace within Neptune's run.
+        log_trainer_parameters (`bool`, *optional*, defaults to True):
+            If True, log all trainer arguments.
+        log_model_parameters (`bool`, *optional*, defaults to True):
+            If True, log parameters of the model.
+        log_checkpoints (`bool`, *optional*, defaults to False):
+            If True, upload checkpoints.
         run (`Run`, *optional*):
             Pass Neptune run object if you want to continue logging to the existing run (resume run).
             Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
