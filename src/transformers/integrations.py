@@ -849,7 +849,7 @@ class NeptuneCallback(TrainerCallback):
         if state.is_world_process_zero:
             if self._log_default_parameters:
                 self._neptune_run[self._base_namespace+"/trainer-parameters"] = args.to_dict()
-                if and hasattr(model, "config") and model.config is not None:
+                if hasattr(model, "config") and model.config is not None:
                     self._neptune_run[self._base_namespace+"/model-parameters"] = model.config.to_dict()
                 
         self._initialized = True
