@@ -792,8 +792,11 @@ class NeptuneCallback(TrainerCallback):
             Root namespace within Neptune's run.
         log_default_parameters (`bool`, *optional*, defaults to True):
             If True, log all trainer arguments and model parameters provided by the trainer. 
-        log_checkpoints (`bool`, *optional*, defaults to False):
-            If True, upload checkpoints.
+        log_checkpoints (`str`, *optional*, defaults to "best"):
+            If "same", upload checkpoints whenever they are saved by the trainer.
+            If "best", upload the best checkpoint (among the ones saved by the trainer, 
+            chosen at the end of the training) 
+            Otherwise, do not upload checkpoints.
         run (`Run`, *optional*):
             Pass Neptune run object if you want to continue logging to the existing run (e.g., resume a run).
             Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_. 
@@ -813,7 +816,7 @@ class NeptuneCallback(TrainerCallback):
         base_namespace="finetuning", 
         run=None, 
         log_default_parameters=True, 
-        log_checkpoints=False,
+        log_checkpoints="same",
         **neptune_run_kwargs):
         
         if not is_neptune_available():
@@ -835,7 +838,7 @@ class NeptuneCallback(TrainerCallback):
         self._log_checkpoints = log_checkpoints
         
         self._neptune_run_kwargs = neptune_run_kwargs
-        
+
     def setup(self, args, state, model):
         '''
         Setup the Neptune.ai integration.
@@ -870,12 +873,28 @@ class NeptuneCallback(TrainerCallback):
     def on_train_end(self, args, state, control, **kwargs):
         if self._initialized and state.is_world_process_zero:
             # Log checkpoints
-            if self._log_checkpoints and self._neptune_run is not None:
-                print("Logging checkpoints. This could take time.. (NOT IMPLEMENTED).")
-                # This does not work, cannot upload a directory (+this directory may contain many checkpoints, 
-                # we should probably only upload when a checkpoint is created (`on_save`) 
-                #self._neptune_run[f"model/"].upload(args.output_dir) 
-        
+            if self._log_checkpoints == 'last' and self._neptune_run is not None:
+                # This is hacky, and in some cases may not work as expected. 
+                # For example, if some of the checkpoints in this directory are from an old run, 
+                # they may still get uploaded. Also, I assume that the path structure of the saved checkpoints
+                # is always the same.
+                ind = -1
+                for f in os.listdir(args.output_dir):
+                    if f.startswith("checkpoint-"):
+                        ind_new = int( f.split("-")[1] )
+                        if ind_new > ind:
+                            ind = ind_new
+                if ind > -1:
+                    self._upload_checkpoint(args.output_dir, ind)
+                
+    def on_save(self, args, state, control, **kwargs):
+        """
+        Upload the checkpoints when it is saved to the hard drive by the trainer. 
+        `log_checkpoints` must be set to `'same'`.
+        """
+        if self._log_checkpoints == 'same' and self._neptune_run is not None:
+            self._upload_checkpoint(args.output_dir, state.global_step)
+            
     def __del__(self):
         """
         Environment:
@@ -907,6 +926,12 @@ class NeptuneCallback(TrainerCallback):
             new_d[self._base_namespace+"/"+k] = v
         return new_d
     
+    def _upload_checkpoint(self, output_dir, step):
+            path_to_checkpoint = os.path.join(output_dir, f"checkpoint-{step}")
+            for f in os.listdir(path_to_checkpoint):
+                if not f.startswith('.'): # exclude hidden files
+                    self._neptune_run[self._base_namespace+f"/checkpoints/checkpoint-{step}/{f.split('.')[0]}"].upload( os.path.join(path_to_checkpoint, f) )
+                                                                                    
 class CodeCarbonCallback(TrainerCallback):
     """
     A [`TrainerCallback`] that tracks the CO2 emission of training.
