@@ -810,6 +810,7 @@ class NeptuneCallback(TrainerCallback):
 
     def __init__(
         self, 
+        *,
         api_token=None,
         project=None,
         name=None,
