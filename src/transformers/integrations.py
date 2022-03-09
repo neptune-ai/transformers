@@ -790,7 +790,7 @@ class NeptuneCallback(TrainerCallback):
             Name of the run, it appears in the "all metadata/sys" section in Neptune UI.
         base_namespace (`str`, *optional*, defaults to "finetuning"):
             Root namespace within Neptune's run.
-        log_default_parameters (`bool`, *optional*, defaults to True):
+        log_parameters (`bool`, *optional*, defaults to True):
             If True, log all trainer arguments and model parameters provided by the trainer. 
         log_checkpoints (`str`, *optional*, defaults to "best"):
             If "same", upload checkpoints whenever they are saved by the trainer.
@@ -815,7 +815,7 @@ class NeptuneCallback(TrainerCallback):
         name=None,
         base_namespace="finetuning", 
         run=None, 
-        log_default_parameters=True, 
+        log_parameters=True, 
         log_checkpoints="same",
         **neptune_run_kwargs):
         
@@ -834,7 +834,7 @@ class NeptuneCallback(TrainerCallback):
         self._base_namespace = base_namespace   
         self._neptune_run = run
         
-        self._log_default_parameters = log_default_parameters
+        self._log_parameters = log_parameters
         self._log_checkpoints = log_checkpoints
         
         self._neptune_run_kwargs = neptune_run_kwargs
@@ -850,7 +850,7 @@ class NeptuneCallback(TrainerCallback):
             self._neptune_run = self._neptune.init(api_token=self._api_token, project=self._project, name=self._name, **self._neptune_run_kwargs) 
 
         if state.is_world_process_zero:
-            if self._log_default_parameters:
+            if self._log_parameters:
                 self._neptune_run[self._base_namespace+"/trainer-parameters"] = args.to_dict()
                 if hasattr(model, "config") and model.config is not None:
                     self._neptune_run[self._base_namespace+"/model-parameters"] = model.config.to_dict()
