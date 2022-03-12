@@ -921,6 +921,12 @@ class NeptuneCallback(TrainerCallback):
         """
         self._neptune_run.stop(seconds=seconds)
     
+    def get_run(self):
+        """
+        Return the Neptune Run object used by the callback.
+        """
+        return self._neptune_run
+    
     def _add_base_namespace(self, d):
         new_d = {}
         for k, v in d.items():
