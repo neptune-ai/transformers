@@ -21,8 +21,7 @@ import re
 
 import numpy
 
-from .file_utils import ExplicitEnum
-from .utils import logging
+from .utils import ExplicitEnum, logging
 
 
 logger = logging.get_logger(__name__)
@@ -35,6 +34,7 @@ class TransposeType(ExplicitEnum):
 
     NO = "no"
     SIMPLE = "simple"
+    CONV1D = "conv1d"
     CONV2D = "conv2d"
 
 
@@ -68,8 +68,9 @@ def convert_tf_weight_name_to_pt_weight_name(tf_name, start_prefix_to_remove="",
 
     # When should we transpose the weights
     if tf_name[-1] == "kernel" and tf_weight_shape is not None and tf_weight_shape.rank == 4:
-        # A simple heuristic to detect conv layer using weight array shape
         transpose = TransposeType.CONV2D
+    elif tf_name[-1] == "kernel" and tf_weight_shape is not None and tf_weight_shape.rank == 3:
+        transpose = TransposeType.CONV1D
     elif bool(
         tf_name[-1] in ["kernel", "pointwise_kernel", "depthwise_kernel"]
         or "emb_projs" in tf_name
@@ -194,7 +195,6 @@ def load_pytorch_weights_in_tf2_model(tf_model, pt_state_dict, tf_inputs=None, a
                 # authorized missing keys don't have to be loaded
                 if any(re.search(pat, name) is not None for pat in tf_model._keys_to_ignore_on_load_missing):
                     continue
-
             raise AttributeError(f"{name} not found in PyTorch model")
 
         array = pt_state_dict[name].numpy()
@@ -204,6 +204,11 @@ def load_pytorch_weights_in_tf2_model(tf_model, pt_state_dict, tf_inputs=None, a
             #    PT: (num_out_channel, num_in_channel, kernel[0], kernel[1])
             # -> TF: (kernel[0], kernel[1], num_in_channel, num_out_channel)
             array = numpy.transpose(array, axes=(2, 3, 1, 0))
+        elif transpose is TransposeType.CONV1D:
+            # Conv1D weight:
+            #    PT: (num_out_channel, num_in_channel, kernel)
+            # -> TF: (kernel, num_in_channel, num_out_channel)
+            array = numpy.transpose(array, axes=(2, 1, 0))
         elif transpose is TransposeType.SIMPLE:
             array = numpy.transpose(array)
 
@@ -249,25 +254,26 @@ def load_pytorch_weights_in_tf2_model(tf_model, pt_state_dict, tf_inputs=None, a
 
     if len(unexpected_keys) > 0:
         logger.warning(
-            f"Some weights of the PyTorch model were not used when "
-            f"initializing the TF 2.0 model {tf_model.__class__.__name__}: {unexpected_keys}\n"
-            f"- This IS expected if you are initializing {tf_model.__class__.__name__} from a PyTorch model trained on another task "
-            f"or with another architecture (e.g. initializing a TFBertForSequenceClassification model from a BertForPreTraining model).\n"
-            f"- This IS NOT expected if you are initializing {tf_model.__class__.__name__} from a PyTorch model that you expect "
-            f"to be exactly identical (e.g. initializing a TFBertForSequenceClassification model from a BertForSequenceClassification model)."
+            "Some weights of the PyTorch model were not used when initializing the TF 2.0 model"
+            f" {tf_model.__class__.__name__}: {unexpected_keys}\n- This IS expected if you are initializing"
+            f" {tf_model.__class__.__name__} from a PyTorch model trained on another task or with another architecture"
+            " (e.g. initializing a TFBertForSequenceClassification model from a BertForPreTraining model).\n- This IS"
+            f" NOT expected if you are initializing {tf_model.__class__.__name__} from a PyTorch model that you expect"
+            " to be exactly identical (e.g. initializing a TFBertForSequenceClassification model from a"
+            " BertForSequenceClassification model)."
         )
     else:
         logger.warning(f"All PyTorch model weights were used when initializing {tf_model.__class__.__name__}.\n")
     if len(missing_keys) > 0:
         logger.warning(
-            f"Some weights or buffers of the TF 2.0 model {tf_model.__class__.__name__} were not initialized from the PyTorch model "
-            f"and are newly initialized: {missing_keys}\n"
-            f"You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference."
+            f"Some weights or buffers of the TF 2.0 model {tf_model.__class__.__name__} were not initialized from the"
+            f" PyTorch model and are newly initialized: {missing_keys}\nYou should probably TRAIN this model on a"
+            " down-stream task to be able to use it for predictions and inference."
         )
     else:
         logger.warning(
             f"All the weights of {tf_model.__class__.__name__} were initialized from the PyTorch model.\n"
-            f"If your task is similar to the task the model of the checkpoint was trained on, "
+            "If your task is similar to the task the model of the checkpoint was trained on, "
             f"you can already use {tf_model.__class__.__name__} for predictions without further training."
         )
 
@@ -355,7 +361,6 @@ def load_tf2_weights_in_pytorch_model(pt_model, tf_weights, allow_missing_keys=F
     all_tf_weights = set(list(tf_weights_map.keys()))
     loaded_pt_weights_data_ptr = {}
     missing_keys_pt = []
-
     for pt_weight_name, pt_weight in current_pt_params_dict.items():
         # Handle PyTorch shared weight ()not duplicated in TF 2.0
         if pt_weight.data_ptr() in loaded_pt_weights_data_ptr:
@@ -377,6 +382,11 @@ def load_tf2_weights_in_pytorch_model(pt_model, tf_weights, allow_missing_keys=F
             #    TF: (kernel[0], kernel[1], num_in_channel, num_out_channel)
             # -> PT: (num_out_channel, num_in_channel, kernel[0], kernel[1])
             array = numpy.transpose(array, axes=(3, 2, 0, 1))
+        elif transpose is TransposeType.CONV1D:
+            # Conv1D weight:
+            #    TF: (kernel, num_in_channel, num_out_channel)
+            # -> PT: (num_out_channel, num_in_channel, kernel)
+            array = numpy.transpose(array, axes=(2, 1, 0))
         elif transpose is TransposeType.SIMPLE:
             array = numpy.transpose(array)
 
@@ -421,25 +431,26 @@ def load_tf2_weights_in_pytorch_model(pt_model, tf_weights, allow_missing_keys=F
 
     if len(unexpected_keys) > 0:
         logger.warning(
-            f"Some weights of the TF 2.0 model were not used when "
-            f"initializing the PyTorch model {pt_model.__class__.__name__}: {unexpected_keys}\n"
-            f"- This IS expected if you are initializing {pt_model.__class__.__name__} from a TF 2.0 model trained on another task "
-            f"or with another architecture (e.g. initializing a BertForSequenceClassification model from a TFBertForPreTraining model).\n"
-            f"- This IS NOT expected if you are initializing {pt_model.__class__.__name__} from a TF 2.0 model that you expect "
-            f"to be exactly identical (e.g. initializing a BertForSequenceClassification model from a TFBertForSequenceClassification model)."
+            "Some weights of the TF 2.0 model were not used when initializing the PyTorch model"
+            f" {pt_model.__class__.__name__}: {unexpected_keys}\n- This IS expected if you are initializing"
+            f" {pt_model.__class__.__name__} from a TF 2.0 model trained on another task or with another architecture"
+            " (e.g. initializing a BertForSequenceClassification model from a TFBertForPreTraining model).\n- This IS"
+            f" NOT expected if you are initializing {pt_model.__class__.__name__} from a TF 2.0 model that you expect"
+            " to be exactly identical (e.g. initializing a BertForSequenceClassification model from a"
+            " TFBertForSequenceClassification model)."
         )
     else:
         logger.warning(f"All TF 2.0 model weights were used when initializing {pt_model.__class__.__name__}.\n")
     if len(missing_keys) > 0:
         logger.warning(
-            f"Some weights of {pt_model.__class__.__name__} were not initialized from the TF 2.0 model "
-            f"and are newly initialized: {missing_keys}\n"
-            f"You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference."
+            f"Some weights of {pt_model.__class__.__name__} were not initialized from the TF 2.0 model and are newly"
+            f" initialized: {missing_keys}\nYou should probably TRAIN this model on a down-stream task to be able to"
+            " use it for predictions and inference."
         )
     else:
         logger.warning(
             f"All the weights of {pt_model.__class__.__name__} were initialized from the TF 2.0 model.\n"
-            f"If your task is similar to the task the model of the checkpoint was trained on, "
+            "If your task is similar to the task the model of the checkpoint was trained on, "
             f"you can already use {pt_model.__class__.__name__} for predictions without further training."
         )
 

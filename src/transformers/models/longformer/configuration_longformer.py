@@ -13,10 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Longformer configuration"""
-from collections import OrderedDict
-from typing import List, Mapping, Union
+from typing import List, Union
 
-from ...onnx import OnnxConfig
 from ...utils import logging
 from ..roberta.configuration_roberta import RobertaConfig
 
@@ -26,9 +24,15 @@ logger = logging.get_logger(__name__)
 LONGFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP = {
     "allenai/longformer-base-4096": "https://huggingface.co/allenai/longformer-base-4096/resolve/main/config.json",
     "allenai/longformer-large-4096": "https://huggingface.co/allenai/longformer-large-4096/resolve/main/config.json",
-    "allenai/longformer-large-4096-finetuned-triviaqa": "https://huggingface.co/allenai/longformer-large-4096-finetuned-triviaqa/resolve/main/config.json",
-    "allenai/longformer-base-4096-extra.pos.embd.only": "https://huggingface.co/allenai/longformer-base-4096-extra.pos.embd.only/resolve/main/config.json",
-    "allenai/longformer-large-4096-extra.pos.embd.only": "https://huggingface.co/allenai/longformer-large-4096-extra.pos.embd.only/resolve/main/config.json",
+    "allenai/longformer-large-4096-finetuned-triviaqa": (
+        "https://huggingface.co/allenai/longformer-large-4096-finetuned-triviaqa/resolve/main/config.json"
+    ),
+    "allenai/longformer-base-4096-extra.pos.embd.only": (
+        "https://huggingface.co/allenai/longformer-base-4096-extra.pos.embd.only/resolve/main/config.json"
+    ),
+    "allenai/longformer-large-4096-extra.pos.embd.only": (
+        "https://huggingface.co/allenai/longformer-large-4096-extra.pos.embd.only/resolve/main/config.json"
+    ),
 }
 
 
@@ -39,8 +43,9 @@ class LongformerConfig(RobertaConfig):
 
     This is the configuration class to store the configuration of a [`LongformerModel`]. It is used to instantiate an
     Longformer model according to the specified arguments, defining the model architecture. Instantiating a
-    configuration with the defaults will yield a similar configuration to that of the RoBERTa
-    [roberta-base](https://huggingface.co/roberta-base) architecture with a sequence length 4,096.
+    configuration with the defaults will yield a similar configuration to that of the LongFormer
+    [allenai/longformer-base-4096](https://huggingface.co/allenai/longformer-base-4096) architecture with a sequence
+    length 4,096.
 
     The [`LongformerConfig`] class directly inherits [`RobertaConfig`]. It reuses the same defaults. Please check the
     parent class for more information.
@@ -69,18 +74,3 @@ class LongformerConfig(RobertaConfig):
     def __init__(self, attention_window: Union[List[int], int] = 512, sep_token_id: int = 2, **kwargs):
         super().__init__(sep_token_id=sep_token_id, **kwargs)
         self.attention_window = attention_window
-
-
-class LongformerOnnxConfig(OnnxConfig):
-    @property
-    def inputs(self) -> Mapping[str, Mapping[int, str]]:
-        return OrderedDict(
-            [
-                ("input_ids", {0: "batch", 1: "sequence"}),
-                ("attention_mask", {0: "batch", 1: "sequence"}),
-            ]
-        )
-
-    @property
-    def outputs(self) -> Mapping[str, Mapping[int, str]]:
-        return OrderedDict([("last_hidden_state", {0: "batch", 1: "sequence"}), ("pooler_output", {0: "batch"})])

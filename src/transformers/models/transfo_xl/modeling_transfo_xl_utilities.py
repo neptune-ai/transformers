@@ -60,7 +60,7 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
         else:
             for i in range(len(self.cutoffs)):
                 l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i + 1]
-                d_emb_i = d_embed // (div_val ** i)
+                d_emb_i = d_embed // (div_val**i)
 
                 self.out_projs.append(nn.Parameter(torch.FloatTensor(d_proj, d_emb_i)))
 
@@ -102,7 +102,7 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
             hidden = hidden.view(-1, hidden.size(-1))
             labels = labels.view(-1)
             if hidden.size(0) != labels.size(0):
-                raise RuntimeError("Input and labels should have the same size " "in the batch dimension.")
+                raise RuntimeError("Input and labels should have the same size in the batch dimension.")
         else:
             hidden = hidden.view(-1, hidden.size(-1))
 

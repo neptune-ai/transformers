@@ -25,8 +25,12 @@ FUNNEL_PRETRAINED_CONFIG_ARCHIVE_MAP = {
     "funnel-transformer/small-base": "https://huggingface.co/funnel-transformer/small-base/resolve/main/config.json",
     "funnel-transformer/medium": "https://huggingface.co/funnel-transformer/medium/resolve/main/config.json",
     "funnel-transformer/medium-base": "https://huggingface.co/funnel-transformer/medium-base/resolve/main/config.json",
-    "funnel-transformer/intermediate": "https://huggingface.co/funnel-transformer/intermediate/resolve/main/config.json",
-    "funnel-transformer/intermediate-base": "https://huggingface.co/funnel-transformer/intermediate-base/resolve/main/config.json",
+    "funnel-transformer/intermediate": (
+        "https://huggingface.co/funnel-transformer/intermediate/resolve/main/config.json"
+    ),
+    "funnel-transformer/intermediate-base": (
+        "https://huggingface.co/funnel-transformer/intermediate-base/resolve/main/config.json"
+    ),
     "funnel-transformer/large": "https://huggingface.co/funnel-transformer/large/resolve/main/config.json",
     "funnel-transformer/large-base": "https://huggingface.co/funnel-transformer/large-base/resolve/main/config.json",
     "funnel-transformer/xlarge": "https://huggingface.co/funnel-transformer/xlarge/resolve/main/config.json",
@@ -77,8 +81,7 @@ class FunnelConfig(PretrainedConfig):
         type_vocab_size (`int`, *optional*, defaults to 3):
             The vocabulary size of the `token_type_ids` passed when calling [`FunnelModel`] or [`TFFunnelModel`].
         initializer_range (`float`, *optional*, defaults to 0.1):
-            The standard deviation of the *uniform initializer* for initializing all weight matrices in attention
-            layers.
+            The upper bound of the *uniform initializer* for initializing all weight matrices in attention layers.
         initializer_std (`float`, *optional*):
             The standard deviation of the *normal initializer* for initializing the embedding matrix and the weight of
             linear layers. Will default to 1 for the embedding matrix and the value given by Xavier initialization for

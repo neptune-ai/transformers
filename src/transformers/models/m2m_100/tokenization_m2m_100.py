@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tokenization classes for M2M100."""
 import json
+import os
 from contextlib import contextmanager
 from pathlib import Path
 from shutil import copyfile
@@ -302,7 +303,8 @@ class M2M100Tokenizer(PreTrainedTokenizer):
 
     def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
         save_dir = Path(save_directory)
-        assert save_dir.is_dir(), f"{save_directory} should be a directory"
+        if not save_dir.is_dir():
+            raise OSError(f"{save_directory} should be a directory")
         vocab_save_path = save_dir / (
             (filename_prefix + "-" if filename_prefix else "") + self.vocab_files_names["vocab_file"]
         )
@@ -312,8 +314,12 @@ class M2M100Tokenizer(PreTrainedTokenizer):
 
         save_json(self.encoder, vocab_save_path)
 
-        if not spm_save_path.exists():
+        if os.path.abspath(self.spm_file) != os.path.abspath(spm_save_path) and os.path.isfile(self.spm_file):
             copyfile(self.spm_file, spm_save_path)
+        elif not os.path.isfile(self.spm_file):
+            with open(spm_save_path, "wb") as fi:
+                content_spiece_model = self.sp_model.serialized_model_proto()
+                fi.write(content_spiece_model)
 
         return (str(vocab_save_path), str(spm_save_path))
 

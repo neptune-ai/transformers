@@ -43,7 +43,7 @@ The section [Data and preprocessing](#data-and-preprocessing) explains
 in more detail what audio data can be used, how to find suitable audio data, and 
 how the audio data can be processed.
 
-For training, it is recommended to use the [official training script](https://github.com/huggingface/transformers/blob/master/examples/pytorch/speech-recognition/run_speech_recognition_ctc.py) or a modification thereof. A step-by-step guide on how to fine-tune 
+For training, it is recommended to use the [official training script](https://github.com/huggingface/transformers/blob/main/examples/pytorch/speech-recognition/run_speech_recognition_ctc.py) or a modification thereof. A step-by-step guide on how to fine-tune 
 an acoustic model for a speech recognition system can be found under [How to fine-tune an acoustic model](#how-to-finetune-an-acoustic-model).
 If possible it is encouraged to fine-tune the acoustic models on local GPU machines, but 
 if those are not available, the OVH could team kindly provides a limited 
@@ -82,12 +82,7 @@ You should have received an invite by email. If you didn't receive an invite, pl
 
 ## Important dates
 
-- **12.01.** Official announcement of the community event. Make sure to sign-up in [this google form](TODO: )
-- **12.01. - 19.01.** Participants sign up for the event.
-- **19.01.** Release of all relevant guides and training scripts.
-- **24.01.** Start of the community week! OVH & Hugging Face gives access to GPUs.
-- **24.01. - 07.02.** The OVH & Hugging Face team will be available for any questions, problems the participants might have.
-- **07.02.** Access to GPU is deactivated and community week officially ends.
+![timeline](https://github.com/patrickvonplaten/scientific_images/raw/master/Robush%20Speech%20Challenge.png)
 
 
 ## Data and preprocessing
@@ -129,7 +124,7 @@ training the acoustic model (example shown in [How to fine-tune an acoustic mode
 It is recommended that this is done by using 🤗 Datasets `.map()` function as shown 
 [here](https://github.com/huggingface/transformers/blob/9a2dabae7002258e41419491c73dd43ad61b5de7/examples/pytorch/speech-recognition/run_speech_recognition_ctc.py#L444). As can be 
 see we can pass some characters that will be removed from the transcriptions, *e.g.*: `--chars_to_ignore , ? . ! - \; \: \" “ % ‘ ” � \`
-on the official ["Single GPU Example"](https://github.com/huggingface/transformers/tree/master/examples/pytorch/speech-recognition#single-gpu-ctc).
+on the official ["Single GPU Example"](https://github.com/huggingface/transformers/tree/main/examples/pytorch/speech-recognition#single-gpu-ctc).
 The participants are free to modify this preprocessing by removing more characters or even replacing characters as 
 it is done in the [official blog post](https://github.com/huggingface/transformers/blob/9a2dabae7002258e41419491c73dd43ad61b5de7/examples/pytorch/speech-recognition/run_speech_recognition_ctc.py#L444).
 **However**, there are some rules regarding what characters are allowed to be removed/replaced and which are not.
@@ -178,7 +173,7 @@ python -c "import torch; print(torch.cuda.is_available())"
 If the above command doesn't print ``True``, in the first step, please follow the
 instructions [here](https://pytorch.org/) to install PyTorch with CUDA.
 
-We strongly recommend making use of the provided PyTorch examples scripts in [transformers/examples/pytorch/speech-recognition](https://github.com/huggingface/transformers/tree/master/examples/pytorch/speech-recognition) to train your speech recognition
+We strongly recommend making use of the provided PyTorch examples scripts in [transformers/examples/pytorch/speech-recognition](https://github.com/huggingface/transformers/tree/main/examples/pytorch/speech-recognition) to train your speech recognition
 system.
 In all likelihood, you will adjust one of the example scripts, so we recommend forking and cloning the 🤗 Transformers repository as follows. 
 
@@ -337,7 +332,7 @@ cp ~/transformers/examples/pytorch/speech-recognition/run_speech_recognition_ctc
 ```
 
 Next, we'll create a bash file to define the hyper-parameters and configurations 
-for training. More detailed information on different settings (single-GPU vs. multi-GPU) can be found [here](https://github.com/huggingface/transformers/tree/master/examples/pytorch/speech-recognition#connectionist-temporal-classification).
+for training. More detailed information on different settings (single-GPU vs. multi-GPU) can be found [here](https://github.com/huggingface/transformers/tree/main/examples/pytorch/speech-recognition#connectionist-temporal-classification).
 
 For demonstration purposes, we will use a dummy XLS-R model `model_name_or_path="hf-test/xls-r-dummy"` on the very low-resource language of "Abkhaz" of [Common Voice 7](https://huggingface.co/datasets/mozilla-foundation/common_voice_7_0): `dataset_config_name="ab"` for just a single epoch.
 
@@ -352,7 +347,7 @@ dummy hyper-parameters and configurations for demonstration purposes.
 
 Note that we add the flag `--use_auth_token` so that datasets requiring access, 
 such as [Common Voice 7](https://huggingface.co/datasets/mozilla-foundation/common_voice_7_0) can be downloaded. In addition, we add the `--push_to_hub` flag to make use of the 
-[Trainers `push_to-hub` functionality](https://huggingface.co/docs/transformers/master/en/main_classes/trainer#transformers.Trainer.push_to_hub) so that your model will be automatically uploaded to the Hub.
+[Trainers `push_to-hub` functionality](https://huggingface.co/docs/transformers/main/en/main_classes/trainer#transformers.Trainer.push_to_hub) so that your model will be automatically uploaded to the Hub.
 
 Let's copy the following code snippet in a file called `run.sh`
 
@@ -394,7 +389,7 @@ The training should not take more than a couple of minutes.
 During the training intermediate saved checkpoints are automatically uploaded to
 your model repository as can be seen [on this commit](https://huggingface.co/hf-test/xls-r-ab-test/commit/0eb19a0fca4d7d163997b59663d98cd856022aa6) . 
 
-At the end of the training, the [Trainer](https://huggingface.co/docs/transformers/master/en/main_classes/trainer) automatically creates a nice model card and all 
+At the end of the training, the [Trainer](https://huggingface.co/docs/transformers/main/en/main_classes/trainer) automatically creates a nice model card and all 
 relevant files are uploaded.
 
 5. **Tips for real model training**
@@ -476,7 +471,7 @@ hyperparameters.
 
 ## How to finetune with OVH cloud
 
-For a more detailed guide on setting up OVHcloud please watch this video: TODO
+[![Youtube](https://www.youtube.com/s/desktop/f506bd45/img/favicon_32.png)](https://youtu.be/XkMnYocAEO0) For a more detailed guide on setting up OVHcloud please watch this video: https://youtu.be/XkMnYocAEO0
 
 ### Creating an OVHCloud account
 *TIP*: If you haven't created a project on OVHcloud yet, make sure you've received your GPU voucher code *beforehand*, 
@@ -502,7 +497,7 @@ Click `+ Launch a new job` on the AI Training page.
    * In `5. Configure your job` select **1** `GPU`.
    * Validate the info and Create the job.
 6. On the `AI Training Jobs` screen wait until the job's status changes from `Pending` to `Running`.
-7. Click `HTTP Access` and log in with the AI training user you've created earlier. 
+7. Click `HTTP Access` from the Job's details page and log in with the AI training user you've created earlier. 
 Once logged in, you can close the page and click `HTTP Access` to launch a JupyterLab notebook.
 8. Awesome, now you have a free GPU-enabled Jupyter instance!
 
@@ -510,6 +505,8 @@ Once logged in, you can close the page and click `HTTP Access` to launch a Jupyt
 like the one in step 5. The Dockerfile for it is available here: 
 [baaastijn/Dockerimages](https://github.com/baaastijn/Dockerimages/tree/main/Hugginface_challenge_speech).
 Once you've built your image, push it to https://hub.docker.com/ and select it during the OVHcloud job creation.
+
+For more quick tutorials about OVHcloud AI products, check out the showcase https://vimeo.com/showcase/8903300
 
 ## How to combine n-gram with acoustic model
 
@@ -590,7 +587,7 @@ both the word- and character error rate.
 
 In a few days, we will give everybody access to some real-world audio data for as many languages as possible.
 If your language has real-world audio data, it will most likely have audio input 
-of multiple minutes. 🤗Transformer's [ASR pipeline](https://huggingface.co/docs/transformers/master/en/main_classes/pipelines#transformers.AutomaticSpeechRecognitionPipeline) supports audio chunking out-of-the-box. You only need to specify 
+of multiple minutes. 🤗Transformer's [ASR pipeline](https://huggingface.co/docs/transformers/main/en/main_classes/pipelines#transformers.AutomaticSpeechRecognitionPipeline) supports audio chunking out-of-the-box. You only need to specify 
 how song each audio chunk should be (`chunk_length_s`) and how much audio stride 
 (`stride_length_s`) each chunk should use.
 For more information on the chunking works, please have a look at [this nice blog post](TODO: ).

@@ -26,24 +26,31 @@ from flax.core.frozen_dict import FrozenDict, unfreeze
 from flax.serialization import from_bytes, to_bytes
 from flax.traverse_util import flatten_dict, unflatten_dict
 from jax.random import PRNGKey
+from requests import HTTPError
 
 from .configuration_utils import PretrainedConfig
-from .file_utils import (
+from .dynamic_module_utils import custom_object_save
+from .generation_flax_utils import FlaxGenerationMixin
+from .modeling_flax_pytorch_utils import load_pytorch_checkpoint_in_flax_state_dict
+from .utils import (
     FLAX_WEIGHTS_NAME,
+    HUGGINGFACE_CO_RESOLVE_ENDPOINT,
     WEIGHTS_NAME,
+    EntryNotFoundError,
     PushToHubMixin,
+    RepositoryNotFoundError,
+    RevisionNotFoundError,
     add_code_sample_docstrings,
     add_start_docstrings_to_model_forward,
     cached_path,
     copy_func,
+    has_file,
     hf_bucket_url,
     is_offline_mode,
     is_remote_url,
+    logging,
     replace_return_docstrings,
 )
-from .generation_flax_utils import FlaxGenerationMixin
-from .modeling_flax_pytorch_utils import load_pytorch_checkpoint_in_flax_state_dict
-from .utils import logging
 
 
 logger = logging.get_logger(__name__)
@@ -82,6 +89,8 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
     config_class = None
     base_model_prefix = ""
     main_input_name = "input_ids"
+    _auto_class = None
+    _missing_keys = set()
 
     def __init__(
         self,
@@ -90,6 +99,7 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
         input_shape: Tuple = (1, 1),
         seed: int = 0,
         dtype: jnp.dtype = jnp.float32,
+        _do_init: bool = True,
     ):
         if config is None:
             raise ValueError("config cannot be None")
@@ -104,15 +114,35 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
         # Those are public as their type is generic to every derived classes.
         self.key = PRNGKey(seed)
         self.dtype = dtype
+        self.input_shape = input_shape
 
-        # randomly initialized parameters
-        random_params = self.init_weights(self.key, input_shape)
+        # To check if the model was intialized automatically.
+        self._is_initialized = _do_init
+
+        if _do_init:
+            # randomly initialized parameters
+            random_params = self.init_weights(self.key, input_shape)
+            params_shape_tree = jax.eval_shape(lambda params: params, random_params)
+        else:
+            init_fn = partial(self.init_weights, input_shape=input_shape)
+            params_shape_tree = jax.eval_shape(init_fn, self.key)
+
+            logger.info(
+                "Model weights are not initialized as `_do_init` is set to `False`. "
+                f"Make sure to call `{self.__class__.__name__}.init_weights` manually to initialize the weights."
+            )
+
+        # get the shape of the parameters
+        self._params_shape_tree = params_shape_tree
 
         # save required_params as set
-        self._required_params = set(flatten_dict(unfreeze(random_params)).keys())
-        self.params = random_params
+        self._required_params = set(flatten_dict(unfreeze(params_shape_tree)).keys())
 
-    def init_weights(self, rng: jax.random.PRNGKey, input_shape: Tuple) -> Dict:
+        # initialize the parameters
+        if _do_init:
+            self.params = random_params
+
+    def init_weights(self, rng: jax.random.PRNGKey, input_shape: Tuple, params: FrozenDict = None) -> Dict:
         raise NotImplementedError(f"init method has to be implemented for {self}")
 
     @classmethod
@@ -139,14 +169,31 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
 
     @property
     def params(self) -> Union[Dict, FrozenDict]:
+        if not self._is_initialized:
+            raise ValueError(
+                "`params` cannot be accessed from model when the model is created with `_do_init=False`. "
+                "You must call `init_weights` manually and store the params outside of the model and "
+                "pass it explicitly where needed."
+            )
         return self._params
 
     @property
     def required_params(self) -> Set:
         return self._required_params
 
+    @property
+    def params_shape_tree(self) -> Dict:
+        return self._params_shape_tree
+
     @params.setter
     def params(self, params: Union[Dict, FrozenDict]):
+        # don't set params if the model is not initialized
+        if not self._is_initialized:
+            raise ValueError(
+                "`params` cannot be set from model when the model is created with `_do_init=False`. "
+                "You store the params outside of the model."
+            )
+
         if isinstance(params, FrozenDict):
             params = unfreeze(params)
         param_keys = set(flatten_dict(params).keys())
@@ -366,7 +413,7 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
                 'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
             local_files_only(`bool`, *optional*, defaults to `False`):
                 Whether or not to only look at local files (i.e., do not try to download the model).
-            revision(`str`, *optional*, defaults to `"main"`):
+            revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id, since we use a
                 git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any
                 identifier allowed by git.
@@ -409,6 +456,7 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
         revision = kwargs.pop("revision", None)
         from_pipeline = kwargs.pop("_from_pipeline", None)
         from_auto_class = kwargs.pop("_from_auto", False)
+        _do_init = kwargs.pop("_do_init", True)
 
         user_agent = {"file_type": "model", "framework": "flax", "from_auto_class": from_auto_class}
         if from_pipeline is not None:
@@ -450,17 +498,25 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
                 elif os.path.isfile(os.path.join(pretrained_model_name_or_path, FLAX_WEIGHTS_NAME)):
                     # Load from a Flax checkpoint
                     archive_file = os.path.join(pretrained_model_name_or_path, FLAX_WEIGHTS_NAME)
+                # At this stage we don't have a weight file so we will raise an error.
+                elif os.path.join(pretrained_model_name_or_path, WEIGHTS_NAME):
+                    raise EnvironmentError(
+                        f"Error no file named {FLAX_WEIGHTS_NAME} found in directory {pretrained_model_name_or_path} "
+                        "but there is a file for PyTorch weights. Use `from_pt=True` to load this model from those "
+                        "weights."
+                    )
                 else:
                     raise EnvironmentError(
-                        f"Error no file named {[FLAX_WEIGHTS_NAME, WEIGHTS_NAME]} found in directory "
-                        f"{pretrained_model_name_or_path} or `from_pt` set to False"
+                        f"Error no file named {FLAX_WEIGHTS_NAME} or {WEIGHTS_NAME} found in directory "
+                        f"{pretrained_model_name_or_path}."
                     )
             elif os.path.isfile(pretrained_model_name_or_path) or is_remote_url(pretrained_model_name_or_path):
                 archive_file = pretrained_model_name_or_path
             else:
+                filename = WEIGHTS_NAME if from_pt else FLAX_WEIGHTS_NAME
                 archive_file = hf_bucket_url(
                     pretrained_model_name_or_path,
-                    filename=WEIGHTS_NAME if from_pt else FLAX_WEIGHTS_NAME,
+                    filename=filename,
                     revision=revision,
                 )
 
@@ -476,15 +532,58 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
                     use_auth_token=use_auth_token,
                     user_agent=user_agent,
                 )
-            except EnvironmentError as err:
-                logger.error(err)
-                msg = (
-                    f"Can't load weights for '{pretrained_model_name_or_path}'. Make sure that:\n\n"
-                    f"- '{pretrained_model_name_or_path}' is a correct model identifier listed on 'https://huggingface.co/models'\n"
-                    f"  (make sure '{pretrained_model_name_or_path}' is not a path to a local directory with something else, in that case)\n\n"
-                    f"- or '{pretrained_model_name_or_path}' is the correct path to a directory containing a file named {WEIGHTS_NAME}.\n\n"
+
+            except RepositoryNotFoundError:
+                raise EnvironmentError(
+                    f"{pretrained_model_name_or_path} is not a local folder and is not a valid model identifier "
+                    "listed on 'https://huggingface.co/models'\nIf this is a private repository, make sure to pass a "
+                    "token having permission to this repo with `use_auth_token` or log in with `huggingface-cli "
+                    "login` and pass `use_auth_token=True`."
                 )
-                raise EnvironmentError(msg)
+            except RevisionNotFoundError:
+                raise EnvironmentError(
+                    f"{revision} is not a valid git identifier (branch name, tag name or commit id) that exists for "
+                    "this model name. Check the model page at "
+                    f"'https://huggingface.co/{pretrained_model_name_or_path}' for available revisions."
+                )
+            except EntryNotFoundError:
+                if filename == FLAX_WEIGHTS_NAME:
+                    has_file_kwargs = {"revision": revision, "proxies": proxies, "use_auth_token": use_auth_token}
+                    if has_file(pretrained_model_name_or_path, WEIGHTS_NAME, **has_file_kwargs):
+                        raise EnvironmentError(
+                            f"{pretrained_model_name_or_path} does not appear to have a file named"
+                            f" {FLAX_WEIGHTS_NAME} but there is a file for PyTorch weights. Use `from_pt=True` to load"
+                            " this model from those weights."
+                        )
+                    else:
+                        raise EnvironmentError(
+                            f"{pretrained_model_name_or_path} does not appear to have a file named"
+                            f" {FLAX_WEIGHTS_NAME} or {WEIGHTS_NAME}."
+                        )
+                else:
+                    raise EnvironmentError(
+                        f"{pretrained_model_name_or_path} does not appear to have a file named {filename}."
+                    )
+            except HTTPError as err:
+                raise EnvironmentError(
+                    f"There was a specific connection error when trying to load {pretrained_model_name_or_path}:\n"
+                    f"{err}"
+                )
+            except ValueError:
+                raise EnvironmentError(
+                    f"We couldn't connect to '{HUGGINGFACE_CO_RESOLVE_ENDPOINT}' to load this model, couldn't find it"
+                    f" in the cached files and it looks like {pretrained_model_name_or_path} is not the path to a"
+                    f" directory containing a file named {FLAX_WEIGHTS_NAME} or {WEIGHTS_NAME}.\nCheckout your"
+                    " internet connection or see how to run the library in offline mode at"
+                    " 'https://huggingface.co/docs/transformers/installation#offline-mode'."
+                )
+            except EnvironmentError:
+                raise EnvironmentError(
+                    f"Can't load the model for '{pretrained_model_name_or_path}'. If you were trying to load it from "
+                    "'https://huggingface.co/models', make sure you don't have a local directory with the same name. "
+                    f"Otherwise, make sure '{pretrained_model_name_or_path}' is the correct path to a directory "
+                    f"containing a file named {FLAX_WEIGHTS_NAME} or {WEIGHTS_NAME}."
+                )
 
             if resolved_archive_file == archive_file:
                 logger.info(f"loading weights file {archive_file}")
@@ -494,7 +593,7 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
             resolved_archive_file = None
 
         # init random models
-        model = cls(config, *model_args, **model_kwargs)
+        model = cls(config, *model_args, _do_init=_do_init, **model_kwargs)
 
         if from_pt:
             state = load_pytorch_checkpoint_in_flax_state_dict(model, resolved_archive_file)
@@ -507,9 +606,9 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
                         with open(resolved_archive_file) as f:
                             if f.read().startswith("version"):
                                 raise OSError(
-                                    "You seem to have cloned a repository without having git-lfs installed. Please install "
-                                    "git-lfs and run `git lfs install` followed by `git lfs pull` in the folder "
-                                    "you cloned."
+                                    "You seem to have cloned a repository without having git-lfs installed. Please"
+                                    " install git-lfs and run `git lfs install` followed by `git lfs pull` in the"
+                                    " folder you cloned."
                                 )
                             else:
                                 raise ValueError from e
@@ -518,24 +617,35 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
             # make sure all arrays are stored as jnp.arrays
             # NOTE: This is to prevent a bug this will be fixed in Flax >= v0.3.4:
             # https://github.com/google/flax/issues/1261
-            state = jax.tree_util.tree_map(jnp.array, state)
+            if _do_init:
+                state = jax.tree_util.tree_map(jnp.array, state)
+            else:
+                # keep the params on CPU if we don't want to initialize
+                state = jax.tree_util.tree_map(lambda x: jax.device_put(x, jax.devices("cpu")[0]), state)
 
         # if model is base model only use model_prefix key
-        if cls.base_model_prefix not in dict(model.params) and cls.base_model_prefix in state:
+        if cls.base_model_prefix not in dict(model.params_shape_tree) and cls.base_model_prefix in state:
             state = state[cls.base_model_prefix]
 
         # if model is head model and we are loading weights from base model
         # we initialize new params dict with base_model_prefix
-        if cls.base_model_prefix in dict(model.params) and cls.base_model_prefix not in state:
+        if cls.base_model_prefix in dict(model.params_shape_tree) and cls.base_model_prefix not in state:
             state = {cls.base_model_prefix: state}
 
         # flatten dicts
         state = flatten_dict(state)
 
-        random_state = flatten_dict(unfreeze(model.params))
+        random_state = flatten_dict(unfreeze(model.params if _do_init else model.params_shape_tree))
 
         missing_keys = model.required_params - set(state.keys())
         unexpected_keys = set(state.keys()) - model.required_params
+
+        if missing_keys and not _do_init:
+            logger.warning(
+                f"The checkpoint {pretrained_model_name_or_path} is missing required keys: {missing_keys}. "
+                "Make sure to call model.init_weights to initialize the missing weights."
+            )
+            cls._missing_keys = missing_keys
 
         # Mistmatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
         # matching the weights in the model.
@@ -553,9 +663,10 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
                         "model."
                     )
 
-        # add missing keys as random parameters
-        for missing_key in missing_keys:
-            state[missing_key] = random_state[missing_key]
+        # add missing keys as random parameters if we are initializing
+        if missing_keys and _do_init:
+            for missing_key in missing_keys:
+                state[missing_key] = random_state[missing_key]
 
         # remove unexpected keys to not be saved again
         for unexpected_key in unexpected_keys:
@@ -563,27 +674,29 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
 
         if len(unexpected_keys) > 0:
             logger.warning(
-                f"Some weights of the model checkpoint at {pretrained_model_name_or_path} were not used when "
-                f"initializing {model.__class__.__name__}: {unexpected_keys}\n"
-                f"- This IS expected if you are initializing {model.__class__.__name__} from the checkpoint of a model trained on another task "
-                f"or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).\n"
-                f"- This IS NOT expected if you are initializing {model.__class__.__name__} from the checkpoint of a model that you expect "
-                f"to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model)."
+                f"Some weights of the model checkpoint at {pretrained_model_name_or_path} were not used when"
+                f" initializing {model.__class__.__name__}: {unexpected_keys}\n- This IS expected if you are"
+                f" initializing {model.__class__.__name__} from the checkpoint of a model trained on another task or"
+                " with another architecture (e.g. initializing a BertForSequenceClassification model from a"
+                " BertForPreTraining model).\n- This IS NOT expected if you are initializing"
+                f" {model.__class__.__name__} from the checkpoint of a model that you expect to be exactly identical"
+                " (initializing a BertForSequenceClassification model from a BertForSequenceClassification model)."
             )
         else:
             logger.info(f"All model checkpoint weights were used when initializing {model.__class__.__name__}.\n")
 
         if len(missing_keys) > 0:
             logger.warning(
-                f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at {pretrained_model_name_or_path} "
-                f"and are newly initialized: {missing_keys}\n"
-                f"You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference."
+                f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at"
+                f" {pretrained_model_name_or_path} and are newly initialized: {missing_keys}\nYou should probably"
+                " TRAIN this model on a down-stream task to be able to use it for predictions and inference."
             )
         elif len(mismatched_keys) == 0:
             logger.info(
-                f"All the weights of {model.__class__.__name__} were initialized from the model checkpoint at {pretrained_model_name_or_path}.\n"
-                f"If your task is similar to the task the model of the checkpoint was trained on, "
-                f"you can already use {model.__class__.__name__} for predictions without further training."
+                f"All the weights of {model.__class__.__name__} were initialized from the model checkpoint at"
+                f" {pretrained_model_name_or_path}.\nIf your task is similar to the task the model of the checkpoint"
+                f" was trained on, you can already use {model.__class__.__name__} for predictions without further"
+                " training."
             )
         if len(mismatched_keys) > 0:
             mismatched_warning = "\n".join(
@@ -593,15 +706,41 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
                 ]
             )
             logger.warning(
-                f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at {pretrained_model_name_or_path} "
-                f"and are newly initialized because the shapes did not match:\n{mismatched_warning}\n"
-                f"You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference."
+                f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at"
+                f" {pretrained_model_name_or_path} and are newly initialized because the shapes did not"
+                f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be able"
+                " to use it for predictions and inference."
             )
 
-        # set correct parameters
-        model.params = unflatten_dict(state)
+        # dictionary of key: dtypes for the model params
+        param_dtypes = jax.tree_map(lambda x: x.dtype, state)
+        # extract keys of parameters not in jnp.float32
+        fp16_params = [k for k in param_dtypes if param_dtypes[k] == jnp.float16]
+        bf16_params = [k for k in param_dtypes if param_dtypes[k] == jnp.bfloat16]
 
-        return model
+        # raise a warning if any of the parameters are not in jnp.float32
+        if len(fp16_params) > 0:
+            logger.warning(
+                f"Some of the weights of {model.__class__.__name__} were initialized in float16 precision from "
+                f"the model checkpoint at {pretrained_model_name_or_path}:\n{fp16_params}\n"
+                "You should probably UPCAST the model weights to float32 if this was not intended. "
+                "See [`~FlaxPreTrainedModel.to_fp32`] for further information on how to do this."
+            )
+
+        if len(bf16_params) > 0:
+            logger.warning(
+                f"Some of the weights of {model.__class__.__name__} were initialized in bfloat16 precision from "
+                f"the model checkpoint at {pretrained_model_name_or_path}:\n{bf16_params}\n"
+                "You should probably UPCAST the model weights to float32 if this was not intended. "
+                "See [`~FlaxPreTrainedModel.to_fp32`] for further information on how to do this."
+            )
+
+        if _do_init:
+            # set correct parameters
+            model.params = unflatten_dict(state)
+            return model
+        else:
+            return model, unflatten_dict(state)
 
     def save_pretrained(self, save_directory: Union[str, os.PathLike], params=None, push_to_hub=False, **kwargs):
         """
@@ -623,7 +762,7 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
                 </Tip>
 
             kwargs:
-                Additional key word arguments passed along to the [`~file_utils.PushToHubMixin.push_to_hub`] method.
+                Additional key word arguments passed along to the [`~utils.PushToHubMixin.push_to_hub`] method.
         """
         if os.path.isfile(save_directory):
             logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
@@ -639,6 +778,12 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
         save_directory = os.path.abspath(save_directory)
         # save config as well
         self.config.architectures = [self.__class__.__name__[4:]]
+
+        # If we have a custom model, we copy the file defining it in the folder and set the attributes so it can be
+        # loaded from the Hub.
+        if self._auto_class is not None:
+            custom_object_save(self, save_directory, config=self.config)
+
         self.config.save_pretrained(save_directory)
 
         # save model
@@ -653,6 +798,32 @@ class FlaxPreTrainedModel(PushToHubMixin, FlaxGenerationMixin):
         if push_to_hub:
             url = self._push_to_hub(repo, commit_message=commit_message)
             logger.info(f"Model pushed to the hub in this commit: {url}")
+
+    @classmethod
+    def register_for_auto_class(cls, auto_class="FlaxAutoModel"):
+        """
+        Register this class with a given auto class. This should only be used for custom models as the ones in the
+        library are already mapped with an auto class.
+
+        <Tip warning={true}>
+
+        This API is experimental and may have some slight breaking changes in the next releases.
+
+        </Tip>
+
+        Args:
+            auto_class (`str` or `type`, *optional*, defaults to `"FlaxAutoModel"`):
+                The auto class to register this new model with.
+        """
+        if not isinstance(auto_class, str):
+            auto_class = auto_class.__name__
+
+        import transformers.models.auto as auto_module
+
+        if not hasattr(auto_module, auto_class):
+            raise ValueError(f"{auto_class} is not a valid auto class.")
+
+        cls._auto_class = auto_class
 
 
 # To update the docstring, we need to copy the method, otherwise we change the original docstring.

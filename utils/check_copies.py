@@ -19,13 +19,13 @@ import os
 import re
 
 import black
-from style_doc import style_docstrings_in_code
+from doc_builder.style_doc import style_docstrings_in_code
 
 
 # All paths are set with the intent you should run this script from the root of the repo with the command
 # python utils/check_copies.py
 TRANSFORMERS_PATH = "src/transformers"
-PATH_TO_DOCS = "docs/source"
+PATH_TO_DOCS = "docs/source/en"
 REPO_PATH = "."
 
 # Mapping for files that are full copies of others (keys are copies, values the file to keep them up to data with)
@@ -40,22 +40,34 @@ LOCALIZED_READMES = {
     "README.md": {
         "start_prompt": "🤗 Transformers currently provides the following architectures",
         "end_prompt": "1. Want to contribute a new model?",
-        "format_model_list": "**[{title}]({model_link})** (from {paper_affiliations}) released with the paper {paper_title_link} by {paper_authors}.{supplements}",
+        "format_model_list": (
+            "**[{title}]({model_link})** (from {paper_affiliations}) released with the paper {paper_title_link} by"
+            " {paper_authors}.{supplements}"
+        ),
     },
     "README_zh-hans.md": {
         "start_prompt": "🤗 Transformers 目前支持如下的架构",
         "end_prompt": "1. 想要贡献新的模型？",
-        "format_model_list": "**[{title}]({model_link})** (来自 {paper_affiliations}) 伴随论文 {paper_title_link} 由 {paper_authors} 发布。{supplements}",
+        "format_model_list": (
+            "**[{title}]({model_link})** (来自 {paper_affiliations}) 伴随论文 {paper_title_link} 由 {paper_authors}"
+            " 发布。{supplements}"
+        ),
     },
     "README_zh-hant.md": {
         "start_prompt": "🤗 Transformers 目前支援以下的架構",
         "end_prompt": "1. 想要貢獻新的模型？",
-        "format_model_list": "**[{title}]({model_link})** (from {paper_affiliations}) released with the paper {paper_title_link} by {paper_authors}.{supplements}",
+        "format_model_list": (
+            "**[{title}]({model_link})** (from {paper_affiliations}) released with the paper {paper_title_link} by"
+            " {paper_authors}.{supplements}"
+        ),
     },
     "README_ko.md": {
         "start_prompt": "🤗 Transformers는 다음 모델들을 제공합니다",
         "end_prompt": "1. 새로운 모델을 올리고 싶나요?",
-        "format_model_list": "**[{title}]({model_link})** (from {paper_affiliations}) released with the paper {paper_title_link} by {paper_authors}.{supplements}",
+        "format_model_list": (
+            "**[{title}]({model_link})** (from {paper_affiliations}) released with the paper {paper_title_link} by"
+            " {paper_authors}.{supplements}"
+        ),
     },
 }
 
@@ -88,7 +100,7 @@ def find_code_in_transformers(object_name):
     line_index = 0
     for name in parts[i + 1 :]:
         while (
-            line_index < len(lines) and re.search(fr"^{indent}(class|def)\s+{name}(\(|\:)", lines[line_index]) is None
+            line_index < len(lines) and re.search(rf"^{indent}(class|def)\s+{name}(\(|\:)", lines[line_index]) is None
         ):
             line_index += 1
         indent += "    "
@@ -130,7 +142,8 @@ def blackify(code):
     has_indent = len(get_indent(code)) > 0
     if has_indent:
         code = f"class Bla:\n{code}"
-    result = black.format_str(code, mode=black.FileMode([black.TargetVersion.PY35], line_length=119))
+    mode = black.Mode(target_versions={black.TargetVersion.PY35}, line_length=119, preview=True)
+    result = black.format_str(code, mode=mode)
     result, _ = style_docstrings_in_code(result)
     return result[len("class Bla:\n") :] if has_indent else result
 
@@ -331,7 +344,7 @@ def convert_to_localized_md(model_list, localized_model_list, format_str):
 
 
 def convert_readme_to_index(model_list):
-    model_list = model_list.replace("https://huggingface.co/docs/transformers/master/", "")
+    model_list = model_list.replace("https://huggingface.co/docs/transformers/main/", "")
     return model_list.replace("https://huggingface.co/docs/transformers/", "")
 
 
@@ -363,6 +376,22 @@ def _find_text_in_file(filename, start_prompt, end_prompt):
 
 def check_model_list_copy(overwrite=False, max_per_line=119):
     """Check the model lists in the README and index.rst are consistent and maybe `overwrite`."""
+    # Fix potential doc links in the README
+    with open(os.path.join(REPO_PATH, "README.md"), "r", encoding="utf-8", newline="\n") as f:
+        readme = f.read()
+    new_readme = readme.replace("https://huggingface.co/transformers", "https://huggingface.co/docs/transformers")
+    new_readme = readme.replace(
+        "https://huggingface.co/docs/main/transformers", "https://huggingface.co/docs/transformers/main"
+    )
+    if new_readme != readme:
+        if overwrite:
+            with open(os.path.join(REPO_PATH, "README.md"), "w", encoding="utf-8", newline="\n") as f:
+                f.write(new_readme)
+        else:
+            raise ValueError(
+                "The main README contains wrong links to the documentation of Transformers. Run `make fix-copies` to "
+                "automatically fix them."
+            )
 
     # If the introduction or the conclusion of the list change, the prompts may need to be updated.
     index_list, start_index, end_index, lines = _find_text_in_file(

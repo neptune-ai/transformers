@@ -19,10 +19,9 @@ import os
 import unicodedata
 from typing import List, Optional, Tuple
 
-from ...file_utils import PaddingStrategy
 from ...tokenization_utils import PreTrainedTokenizer, _is_control, _is_punctuation, _is_whitespace
 from ...tokenization_utils_base import BatchEncoding
-from ...utils import logging
+from ...utils import PaddingStrategy, logging
 
 
 logger = logging.get_logger(__name__)
@@ -31,37 +30,45 @@ VOCAB_FILES_NAMES = {"vocab_file": "vocab.txt"}
 
 PRETRAINED_VOCAB_FILES_MAP = {
     "vocab_file": {
-        "qqaatw/realm-cc-news-pretrained-embedder": "https://huggingface.co/qqaatw/realm-cc-news-pretrained-embedder/resolve/main/vocab.txt",
-        "qqaatw/realm-cc-news-pretrained-encoder": "https://huggingface.co/qqaatw/realm-cc-news-pretrained-encoder/resolve/main/vocab.txt",
-        "qqaatw/realm-cc-news-pretrained-scorer": "https://huggingface.co/qqaatw/realm-cc-news-pretrained-scorer/resolve/main/vocab.txt",
-        "qqaatw/realm-cc-news-pretrained-openqa": "https://huggingface.co/qqaatw/realm-cc-news-pretrained-openqa/aresolve/main/vocab.txt",
-        "qqaatw/realm-orqa-nq-openqa": "https://huggingface.co/qqaatw/realm-orqa-nq-openqa/resolve/main/vocab.txt",
-        "qqaatw/realm-orqa-nq-reader": "https://huggingface.co/qqaatw/realm-orqa-nq-reader/resolve/main/vocab.txt",
-        "qqaatw/realm-orqa-wq-openqa": "https://huggingface.co/qqaatw/realm-orqa-wq-openqa/resolve/main/vocab.txt",
-        "qqaatw/realm-orqa-wq-reader": "https://huggingface.co/qqaatw/realm-orqa-wq-reader/resolve/main/vocab.txt",
+        "google/realm-cc-news-pretrained-embedder": (
+            "https://huggingface.co/google/realm-cc-news-pretrained-embedder/resolve/main/vocab.txt"
+        ),
+        "google/realm-cc-news-pretrained-encoder": (
+            "https://huggingface.co/google/realm-cc-news-pretrained-encoder/resolve/main/vocab.txt"
+        ),
+        "google/realm-cc-news-pretrained-scorer": (
+            "https://huggingface.co/google/realm-cc-news-pretrained-scorer/resolve/main/vocab.txt"
+        ),
+        "google/realm-cc-news-pretrained-openqa": (
+            "https://huggingface.co/google/realm-cc-news-pretrained-openqa/aresolve/main/vocab.txt"
+        ),
+        "google/realm-orqa-nq-openqa": "https://huggingface.co/google/realm-orqa-nq-openqa/resolve/main/vocab.txt",
+        "google/realm-orqa-nq-reader": "https://huggingface.co/google/realm-orqa-nq-reader/resolve/main/vocab.txt",
+        "google/realm-orqa-wq-openqa": "https://huggingface.co/google/realm-orqa-wq-openqa/resolve/main/vocab.txt",
+        "google/realm-orqa-wq-reader": "https://huggingface.co/google/realm-orqa-wq-reader/resolve/main/vocab.txt",
     }
 }
 
 PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES = {
-    "qqaatw/realm-cc-news-pretrained-embedder": 512,
-    "qqaatw/realm-cc-news-pretrained-encoder": 512,
-    "qqaatw/realm-cc-news-pretrained-scorer": 512,
-    "qqaatw/realm-cc-news-pretrained-openqa": 512,
-    "qqaatw/realm-orqa-nq-openqa": 512,
-    "qqaatw/realm-orqa-nq-reader": 512,
-    "qqaatw/realm-orqa-wq-openqa": 512,
-    "qqaatw/realm-orqa-wq-reader": 512,
+    "google/realm-cc-news-pretrained-embedder": 512,
+    "google/realm-cc-news-pretrained-encoder": 512,
+    "google/realm-cc-news-pretrained-scorer": 512,
+    "google/realm-cc-news-pretrained-openqa": 512,
+    "google/realm-orqa-nq-openqa": 512,
+    "google/realm-orqa-nq-reader": 512,
+    "google/realm-orqa-wq-openqa": 512,
+    "google/realm-orqa-wq-reader": 512,
 }
 
 PRETRAINED_INIT_CONFIGURATION = {
-    "qqaatw/realm-cc-news-pretrained-embedder": {"do_lower_case": True},
-    "qqaatw/realm-cc-news-pretrained-encoder": {"do_lower_case": True},
-    "qqaatw/realm-cc-news-pretrained-scorer": {"do_lower_case": True},
-    "qqaatw/realm-cc-news-pretrained-openqa": {"do_lower_case": True},
-    "qqaatw/realm-orqa-nq-openqa": {"do_lower_case": True},
-    "qqaatw/realm-orqa-nq-reader": {"do_lower_case": True},
-    "qqaatw/realm-orqa-wq-openqa": {"do_lower_case": True},
-    "qqaatw/realm-orqa-wq-reader": {"do_lower_case": True},
+    "google/realm-cc-news-pretrained-embedder": {"do_lower_case": True},
+    "google/realm-cc-news-pretrained-encoder": {"do_lower_case": True},
+    "google/realm-cc-news-pretrained-scorer": {"do_lower_case": True},
+    "google/realm-cc-news-pretrained-openqa": {"do_lower_case": True},
+    "google/realm-orqa-nq-openqa": {"do_lower_case": True},
+    "google/realm-orqa-nq-reader": {"do_lower_case": True},
+    "google/realm-orqa-wq-openqa": {"do_lower_case": True},
+    "google/realm-orqa-wq-reader": {"do_lower_case": True},
 }
 
 
@@ -166,8 +173,8 @@ class RealmTokenizer(PreTrainedTokenizer):
 
         if not os.path.isfile(vocab_file):
             raise ValueError(
-                f"Can't find a vocabulary file at path '{vocab_file}'. To load the vocabulary from a Google pretrained "
-                "model use `tokenizer = RealmTokenizer.from_pretrained(PRETRAINED_MODEL_NAME)`"
+                f"Can't find a vocabulary file at path '{vocab_file}'. To load the vocabulary from a Google pretrained"
+                " model use `tokenizer = RealmTokenizer.from_pretrained(PRETRAINED_MODEL_NAME)`"
             )
         self.vocab = load_vocab(vocab_file)
         self.ids_to_tokens = collections.OrderedDict([(ids, tok) for tok, ids in self.vocab.items()])
@@ -252,7 +259,7 @@ class RealmTokenizer(PreTrainedTokenizer):
         >>> # batch_size = 2, num_candidates = 2
         >>> text = [["Hello world!", "Nice to meet you!"], ["The cute cat.", "The adorable dog."]]
 
-        >>> tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-encoder")
+        >>> tokenizer = RealmTokenizer.from_pretrained("google/realm-cc-news-pretrained-encoder")
         >>> tokenized_text = tokenizer.batch_encode_candidates(text, max_length=10, return_tensors="pt")
         ```"""
 

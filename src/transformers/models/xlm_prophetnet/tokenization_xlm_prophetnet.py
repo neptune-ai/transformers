@@ -30,7 +30,9 @@ VOCAB_FILES_NAMES = {"vocab_file": "prophetnet.tokenizer"}
 
 PRETRAINED_VOCAB_FILES_MAP = {
     "vocab_file": {
-        "microsoft/xprophetnet-large-wiki100-cased": "https://huggingface.co/microsoft/xprophetnet-large-wiki100-cased/resolve/main/prophetnet.tokenizer",
+        "microsoft/xprophetnet-large-wiki100-cased": (
+            "https://huggingface.co/microsoft/xprophetnet-large-wiki100-cased/resolve/main/prophetnet.tokenizer"
+        ),
     }
 }
 
@@ -159,8 +161,8 @@ class XLMProphetNetTokenizer(PreTrainedTokenizer):
             import sentencepiece as spm
         except ImportError:
             logger.warning(
-                "You need to install SentencePiece to use XLMRobertaTokenizer: https://github.com/google/sentencepiece "
-                "pip install sentencepiece"
+                "You need to install SentencePiece to use XLMRobertaTokenizer: https://github.com/google/sentencepiece"
+                " pip install sentencepiece"
             )
             raise
 
@@ -198,8 +200,8 @@ class XLMProphetNetTokenizer(PreTrainedTokenizer):
             import sentencepiece as spm
         except ImportError:
             logger.warning(
-                "You need to install SentencePiece to use XLMRobertaTokenizer: https://github.com/google/sentencepiece "
-                "pip install sentencepiece"
+                "You need to install SentencePiece to use XLMRobertaTokenizer: https://github.com/google/sentencepiece"
+                " pip install sentencepiece"
             )
             raise
 
@@ -302,8 +304,12 @@ class XLMProphetNetTokenizer(PreTrainedTokenizer):
             save_directory, (filename_prefix + "-" if filename_prefix else "") + VOCAB_FILES_NAMES["vocab_file"]
         )
 
-        if os.path.abspath(self.vocab_file) != os.path.abspath(out_vocab_file):
+        if os.path.abspath(self.vocab_file) != os.path.abspath(out_vocab_file) and os.path.isfile(self.vocab_file):
             copyfile(self.vocab_file, out_vocab_file)
+        elif not os.path.isfile(self.vocab_file):
+            with open(out_vocab_file, "wb") as fi:
+                content_spiece_model = self.sp_model.serialized_model_proto()
+                fi.write(content_spiece_model)
 
         return (out_vocab_file,)
 
