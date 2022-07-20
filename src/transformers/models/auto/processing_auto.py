@@ -38,8 +38,10 @@ logger = logging.get_logger(__name__)
 PROCESSOR_MAPPING_NAMES = OrderedDict(
     [
         ("clip", "CLIPProcessor"),
-        ("flava", "FLAVAProcessor"),
+        ("flava", "FlavaProcessor"),
+        ("groupvit", "CLIPProcessor"),
         ("layoutlmv2", "LayoutLMv2Processor"),
+        ("layoutlmv3", "LayoutLMv3Processor"),
         ("layoutxlm", "LayoutXLMProcessor"),
         ("sew", "Wav2Vec2Processor"),
         ("sew-d", "Wav2Vec2Processor"),

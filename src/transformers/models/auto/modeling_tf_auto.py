@@ -42,6 +42,7 @@ TF_MODEL_MAPPING_NAMES = OrderedDict(
         ("data2vec-vision", "TFData2VecVisionModel"),
         ("deberta", "TFDebertaModel"),
         ("deberta-v2", "TFDebertaV2Model"),
+        ("deit", "TFDeiTModel"),
         ("distilbert", "TFDistilBertModel"),
         ("dpr", "TFDPRQuestionEncoder"),
         ("electra", "TFElectraModel"),
@@ -60,8 +61,11 @@ TF_MODEL_MAPPING_NAMES = OrderedDict(
         ("mpnet", "TFMPNetModel"),
         ("mt5", "TFMT5Model"),
         ("openai-gpt", "TFOpenAIGPTModel"),
+        ("opt", "TFOPTModel"),
         ("pegasus", "TFPegasusModel"),
+        ("regnet", "TFRegNetModel"),
         ("rembert", "TFRemBertModel"),
+        ("resnet", "TFResNetModel"),
         ("roberta", "TFRobertaModel"),
         ("roformer", "TFRoFormerModel"),
         ("speech_to_text", "TFSpeech2TextModel"),
@@ -151,6 +155,7 @@ TF_MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = OrderedDict(
         ("gpt2", "TFGPT2LMHeadModel"),
         ("gptj", "TFGPTJForCausalLM"),
         ("openai-gpt", "TFOpenAIGPTLMHeadModel"),
+        ("opt", "TFOPTForCausalLM"),
         ("rembert", "TFRemBertForCausalLM"),
         ("roberta", "TFRobertaForCausalLM"),
         ("roformer", "TFRoFormerForCausalLM"),
@@ -162,6 +167,7 @@ TF_MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = OrderedDict(
 
 TF_MODEL_FOR_MASKED_IMAGE_MODELING_MAPPING_NAMES = OrderedDict(
     [
+        ("deit", "TFDeiTForMaskedImageModeling"),
         ("swin", "TFSwinForMaskedImageModeling"),
     ]
 )
@@ -171,8 +177,18 @@ TF_MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES = OrderedDict(
         # Model for Image-classsification
         ("convnext", "TFConvNextForImageClassification"),
         ("data2vec-vision", "TFData2VecVisionForImageClassification"),
+        ("deit", ("TFDeiTForImageClassification", "TFDeiTForImageClassificationWithTeacher")),
+        ("regnet", "TFRegNetForImageClassification"),
+        ("resnet", "TFResNetForImageClassification"),
         ("swin", "TFSwinForImageClassification"),
         ("vit", "TFViTForImageClassification"),
+    ]
+)
+
+TF_MODEL_FOR_SEMANTIC_SEGMENTATION_MAPPING_NAMES = OrderedDict(
+    [
+        # Model for Semantic Segmentation mapping
+        ("data2vec-vision", "TFData2VecVisionForSemanticSegmentation"),
     ]
 )
 
@@ -363,6 +379,9 @@ TF_MODEL_FOR_MASKED_IMAGE_MODELING_MAPPING = _LazyAutoMapping(
 TF_MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING = _LazyAutoMapping(
     CONFIG_MAPPING_NAMES, TF_MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES
 )
+TF_MODEL_FOR_SEMANTIC_SEGMENTATION_MAPPING = _LazyAutoMapping(
+    CONFIG_MAPPING_NAMES, TF_MODEL_FOR_SEMANTIC_SEGMENTATION_MAPPING_NAMES
+)
 TF_MODEL_FOR_VISION_2_SEQ_MAPPING = _LazyAutoMapping(CONFIG_MAPPING_NAMES, TF_MODEL_FOR_VISION_2_SEQ_MAPPING_NAMES)
 TF_MODEL_FOR_MASKED_LM_MAPPING = _LazyAutoMapping(CONFIG_MAPPING_NAMES, TF_MODEL_FOR_MASKED_LM_MAPPING_NAMES)
 TF_MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING = _LazyAutoMapping(
@@ -435,6 +454,15 @@ class TFAutoModelForImageClassification(_BaseAutoModelClass):
 
 TFAutoModelForImageClassification = auto_class_update(
     TFAutoModelForImageClassification, head_doc="image classification"
+)
+
+
+class TFAutoModelForSemanticSegmentation(_BaseAutoModelClass):
+    _model_mapping = TF_MODEL_FOR_SEMANTIC_SEGMENTATION_MAPPING
+
+
+TF_AutoModelForSemanticSegmentation = auto_class_update(
+    TFAutoModelForSemanticSegmentation, head_doc="semantic segmentation"
 )
 
 
