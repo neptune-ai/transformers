@@ -22,6 +22,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from typing import Optional, Dict
 
 from .utils import flatten_dict, is_datasets_available, logging
 
@@ -962,137 +963,108 @@ class NeptuneCallback(TrainerCallback):
             Note that `**neptune_run_kwargs` are passed down to `neptune.init()` only if run is not provided.
     """
 
+    class NeptuneTransformersIntegrationMissingConfiguration(Exception):
+        def __init__(self):
+            # TODO: Update the exception
+            super().__init__("""
+            ------ Unsupported ----
+            We were not able to create new Runs.
+            You provided custom Neptune Run with `run` argument to `NeptuneCallback`.
+            In order of getting integration fully operational
+            You should provide `api_token` and `project`
+            (with NeptuneCallback or environment variables).
+            """)
+
     def __init__(
         self, 
         *,
-        api_token=None,
-        project=None,
-        name=None,
-        base_namespace="finetuning", 
-        run=None, 
-        log_parameters=True, 
-        log_checkpoints="same",
-        **neptune_run_kwargs):
-        
+        api_token: Optional[str] = None,
+        project: Optional[str] = None,
+        name: Optional[str] = None,
+        base_namespace: str = "finetuning",
+        run: Optional["Run"] = None,
+        log_parameters: bool = True,
+        log_checkpoints: Optional[str] = "same",
+        **neptune_run_kwargs
+    ):
         if not is_neptune_available():
             raise ValueError(
                 "NeptuneCallback requires neptune-client to be installed. Run `pip install neptune-client`."
             )
+
         import neptune.new as neptune
+        from neptune.new.metadata_containers.run import Run
+        from neptune.new.internal.utils import verify_type
+
+        verify_type('api_token', api_token, (str, type(None)))
+        verify_type('project', project, (str, type(None)))
+        verify_type('name', name, (str, type(None)))
+        verify_type('base_namespace', base_namespace, str)
+        verify_type('run', run, (Run, type(None)))
+        verify_type('log_parameters', log_parameters, bool)
+        verify_type('log_checkpoints', log_checkpoints, (str, type(None)))
 
         self._neptune = neptune
-        self._initialized = False
-        
-        self._api_token = api_token
-        self._project = project
-        self._name = name
-        self._base_namespace = base_namespace   
-        self._neptune_run = run
-        
+        self._base_namespace = base_namespace
         self._log_parameters = log_parameters
         self._log_checkpoints = log_checkpoints
+        self._run: Optional[Run] = run
         
-        self._neptune_run_kwargs = neptune_run_kwargs
+        self._init_run_kwargs = {
+            'api_token': api_token,
+            'project': project,
+            'name': name,
+            **neptune_run_kwargs
+        }
 
-    def setup(self, args, state, model):
-        '''
-        Setup the Neptune.ai integration.
-        
-        (1) Create a Neptune run (if does not exist).
-        (2) Log model and trainer parameters (split them into separate namespaces). 
-        '''
-        if self._neptune_run is None:
-            self._neptune_run = self._neptune.init(api_token=self._api_token, project=self._project, name=self._name, **self._neptune_run_kwargs) 
+    def _stop_run_if_exists(self):
+        if self._run:
+            self._run.stop()
+            del self._run
+            self._run = None
 
-        if state.is_world_process_zero:
-            if self._log_parameters:
-                self._neptune_run[self._base_namespace+"/trainer_parameters"] = args.to_dict()
-                if hasattr(model, "config") and model.config is not None:
-                    self._neptune_run[self._base_namespace+"/model_parameters"] = model.config.to_dict()
-                
-        self._initialized = True
+    def _force_new_run(self):
+        from neptune.new.exceptions import NeptuneMissingProjectNameException, NeptuneMissingApiTokenException
+
+        self._stop_run_if_exists()
+        try:
+            self._run = self._neptune.init(**self._init_run_kwargs)
+        except (NeptuneMissingProjectNameException, NeptuneMissingApiTokenException):
+            raise NeptuneCallback.NeptuneTransformersIntegrationMissingConfiguration()
+
+    @property
+    def run(self):
+        if self._run is None:
+            self._force_new_run()
+        return self._run
+
+    def __del__(self):
+        self._stop_run_if_exists()
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
-        if not self._initialized:
-            self.setup(args, state, model)
+        self._force_new_run()
 
-    def on_log(self, args, state, control, logs, model=None, **kwargs):
-        if not self._initialized:
-            self.setup(args, state, model)
-        if state.is_world_process_zero:
-            logs = rewrite_logs(logs) # Note that this is implemented in transformers.integrations.
-            logs = self._add_base_namespace(logs)
-            for k, v in logs.items():
-                self._neptune_run[k].log(v, step=state.global_step)
-                
-    def on_train_end(self, args, state, control, **kwargs):
-        if self._initialized and state.is_world_process_zero:
-            # Log checkpoints
-            if self._log_checkpoints == 'last' and self._neptune_run is not None:
-                # This is hacky, and in some cases may not work as expected. 
-                # For example, if some of the checkpoints in this directory are from an old run, 
-                # they may still get uploaded. Also, I assume that the path structure of the saved checkpoints
-                # is always the same.
-                ind = -1
-                for f in os.listdir(args.output_dir):
-                    if f.startswith("checkpoint-"):
-                        ind_new = int( f.split("-")[1] )
-                        if ind_new > ind:
-                            ind = ind_new
-                if ind > -1:
-                    self._upload_checkpoint(args.output_dir, ind)
-                
-    def on_save(self, args, state, control, **kwargs):
-        """
-        Upload the checkpoints when it is saved to the hard drive by the trainer. 
-        `log_checkpoints` must be set to `'same'`.
-        """
-        if self._log_checkpoints == 'same' and self._neptune_run is not None:
-            self._upload_checkpoint(args.output_dir, state.global_step)
-            
-    def __del__(self):
-        """
-        Environment:
-            NEPTUNE_STOP_TIMEOUT (`int`, *optional*):
-                Number of seconsds to wait for all Neptune.ai tracking calls to finish, before stopping the tracked
-                run. If not set it will wait for all tracking calls to finish.
-        """
-        try:
-            stop_timeout = os.getenv("NEPTUNE_STOP_TIMEOUT")
-            stop_timeout = int(stop_timeout) if stop_timeout else None
-            self._neptune_run.stop(seconds=stop_timeout)
-        except AttributeError:
-            pass
+    @classmethod
+    def get_run(cls, trainer: "Trainer"):
+        for callback in trainer.callback_handler.callbacks:
+            if isinstance(callback, cls):
+                return callback.run
 
-    def stop_run(self, seconds=None):
-        """
-        Stop the run.
-        
-        Args:
-            seconds (`int`, *optional*, defaults to None):
-                Number of seconds to wait for all Neptune.ai tracking calls to finish, before stopping the tracked
-                run. If not set it will wait for all tracking calls to finish.
-        """
-        self._neptune_run.stop(seconds=seconds)
-    
-    def get_run(self):
-        """
-        Return the Neptune Run object used by the callback.
-        """
-        return self._neptune_run
-    
-    def _add_base_namespace(self, d):
-        new_d = {}
-        for k, v in d.items():
-            new_d[self._base_namespace+"/"+k] = v
-        return new_d
-    
-    def _upload_checkpoint(self, output_dir, step):
-            path_to_checkpoint = os.path.join(output_dir, f"checkpoint-{step}")
-            for f in os.listdir(path_to_checkpoint):
-                if not f.startswith('.'): # exclude hidden files
-                    self._neptune_run[self._base_namespace+f"/checkpoints/checkpoint-{step}/{f.split('.')[0]}"].upload( os.path.join(path_to_checkpoint, f) )
-                                                                                    
+        # TODO: Update the exception
+        raise Exception(f"Trainer has any {repr(cls)} configured")
+
+    def on_log(
+        self,
+        args: "TrainingArguments",
+        state: "TrainerState",
+        control: "TrainerControl",
+        logs: Dict[str, float] = None,
+        **kwargs
+    ):
+        for k, v in logs.items():
+            self.run[k].log(v)
+
+
 class CodeCarbonCallback(TrainerCallback):
     """
     A [`TrainerCallback`] that tracks the CO2 emission of training.
