@@ -1045,7 +1045,7 @@ class NeptuneCallback(TrainerCallback):
         self._force_new_run()
 
     @classmethod
-    def get_run(cls, trainer: "Trainer"):
+    def get_run(cls, trainer):
         for callback in trainer.callback_handler.callbacks:
             if isinstance(callback, cls):
                 return callback.run
@@ -1053,14 +1053,7 @@ class NeptuneCallback(TrainerCallback):
         # TODO: Update the exception
         raise Exception(f"Trainer has any {repr(cls)} configured")
 
-    def on_log(
-        self,
-        args: "TrainingArguments",
-        state: "TrainerState",
-        control: "TrainerControl",
-        logs: Dict[str, float] = None,
-        **kwargs
-    ):
+    def on_log(self, args, state, control, logs: Dict[str, float] = None, **kwargs):
         for k, v in logs.items():
             self.run[k].log(v)
 
