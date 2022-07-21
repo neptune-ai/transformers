@@ -22,7 +22,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, TYPE_CHECKING
 
 from .utils import flatten_dict, is_datasets_available, logging
 
@@ -928,6 +928,7 @@ class MLflowCallback(TrainerCallback):
 
 class NeptuneCallback(TrainerCallback):
     """
+    TODO: NPT-12189 - Update the docstring
     A [`TrainerCallback`] that sends the logs to [Neptune](https://neptune.ai).
    
     Args:
@@ -962,10 +963,12 @@ class NeptuneCallback(TrainerCallback):
             when a new run is created. 
             Note that `**neptune_run_kwargs` are passed down to `neptune.init()` only if run is not provided.
     """
+    if TYPE_CHECKING and is_neptune_available():
+        from neptune.new.metadata_containers.run import Run
 
-    class NeptuneTransformersIntegrationMissingConfiguration(Exception):
+    class MissingConfiguration(Exception):
         def __init__(self):
-            # TODO: Update the exception
+            # TODO: NPT-12189 - Update the exception
             super().__init__("""
             ------ Unsupported ----
             We were not able to create new Runs.
@@ -988,11 +991,11 @@ class NeptuneCallback(TrainerCallback):
         **neptune_run_kwargs
     ):
         if not is_neptune_available():
+            # TODO: NPT-12189 - Update the exception
             raise ValueError(
                 "NeptuneCallback requires neptune-client to be installed. Run `pip install neptune-client`."
             )
 
-        import neptune.new as neptune
         from neptune.new.metadata_containers.run import Run
         from neptune.new.internal.utils import verify_type
 
@@ -1004,11 +1007,11 @@ class NeptuneCallback(TrainerCallback):
         verify_type('log_parameters', log_parameters, bool)
         verify_type('log_checkpoints', log_checkpoints, (str, type(None)))
 
-        self._neptune = neptune
         self._base_namespace = base_namespace
         self._log_parameters = log_parameters
         self._log_checkpoints = log_checkpoints
-        self._run: Optional[Run] = run
+        self._initial_run: Optional[Run] = run
+        self._run: Optional[Run] = None
         
         self._init_run_kwargs = {
             'api_token': api_token,
@@ -1023,26 +1026,32 @@ class NeptuneCallback(TrainerCallback):
             del self._run
             self._run = None
 
-    def _force_new_run(self):
-        from neptune.new.exceptions import NeptuneMissingProjectNameException, NeptuneMissingApiTokenException
+    def _initialize_run(self):
+        if self._initial_run is not None:
+            self._run = self._initial_run
+            self._initial_run = None
+        else:
+            from neptune.new import init_run
+            from neptune.new.exceptions import NeptuneMissingProjectNameException, NeptuneMissingApiTokenException
 
-        self._stop_run_if_exists()
-        try:
-            self._run = self._neptune.init(**self._init_run_kwargs)
-        except (NeptuneMissingProjectNameException, NeptuneMissingApiTokenException):
-            raise NeptuneCallback.NeptuneTransformersIntegrationMissingConfiguration()
+            self._stop_run_if_exists()
+
+            try:
+                self._run = init_run(**self._init_run_kwargs)
+            except (NeptuneMissingProjectNameException, NeptuneMissingApiTokenException) as e:
+                raise NeptuneCallback.MissingConfiguration() from e
 
     @property
     def run(self):
         if self._run is None:
-            self._force_new_run()
+            self._initialize_run()
         return self._run
 
     def __del__(self):
         self._stop_run_if_exists()
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
-        self._force_new_run()
+        self._initialize_run()
 
     @classmethod
     def get_run(cls, trainer):
@@ -1050,8 +1059,8 @@ class NeptuneCallback(TrainerCallback):
             if isinstance(callback, cls):
                 return callback.run
 
-        # TODO: Update the exception
-        raise Exception(f"Trainer has any {repr(cls)} configured")
+        # TODO: NPT-12189 Update the exception
+        raise Exception("Trainer has any NeptuneCallback configured")
 
     def on_log(self, args, state, control, logs: Dict[str, float] = None, **kwargs):
         for k, v in logs.items():
