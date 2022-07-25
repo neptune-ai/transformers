@@ -1136,6 +1136,13 @@ class NeptuneCallback(TrainerCallback):
                 "To use best model checkpoint saving load_best_model_at_end needs to be enabled"
             )
 
+    def _log_hyper_param_search_parameters(self, state):
+        if state and hasattr(state, 'trial_name'):
+            self._metadata_namespace['trial'] = state.trial_name
+
+        if state and hasattr(state, 'trial_params') and state.trial_params is not None:
+            self._metadata_namespace['trial_params'] = state.trial_params
+
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         if not state.is_world_process_zero:
             return
