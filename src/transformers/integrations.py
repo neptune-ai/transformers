@@ -1107,6 +1107,13 @@ class NeptuneCallback(TrainerCallback):
         if state and hasattr(state, 'trial_params') and state.trial_params is not None:
             self._metadata_namespace['trial_params'] = state.trial_params
 
+    def _log_hyper_param_search_parameters(self, state):
+        if state and hasattr(state, 'trial_name'):
+            self._metadata_namespace['trial'] = state.trial_name
+
+        if state and hasattr(state, 'trial_params') and state.trial_params is not None:
+            self._metadata_namespace['trial_params'] = state.trial_params
+
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         self._ensure_run_with_monitoring()
         self._force_reset_monitoring_run = True
