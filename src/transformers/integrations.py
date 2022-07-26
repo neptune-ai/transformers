@@ -451,6 +451,8 @@ def get_available_reporting_integrations():
         integrations.append("comet_ml")
     if is_mlflow_available():
         integrations.append("mlflow")
+    if is_neptune_available():
+        integrations.append("neptune")
     if is_tensorboard_available():
         integrations.append("tensorboard")
     if is_wandb_available():
