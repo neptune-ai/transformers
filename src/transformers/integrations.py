@@ -24,6 +24,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Dict, TYPE_CHECKING
 
+import numpy as np
+
 from .utils import flatten_dict, is_datasets_available, logging
 from . import __version__ as version
 
@@ -1030,6 +1032,15 @@ class NeptuneCallback(TrainerCallback):
         self._force_reset_monitoring_run = False
         self._init_run_kwargs = {"api_token": api_token, "project": project, "name": name, **neptune_run_kwargs}
 
+        self._should_upload_checkpoint = self._log_checkpoints is not None
+        self._recent_checkpoint_path = None
+
+        self._target_checkpoints_namespace = 'checkpoints'
+        self._should_clean_recently_uploaded_checkpoint = False
+        if self._log_checkpoints in {'last', 'best'}:
+            self._target_checkpoints_namespace = f'checkpoints/{self._log_checkpoints}'
+            self._should_clean_recently_uploaded_checkpoint = True
+
     def _stop_run_if_exists(self):
         if self._run:
             self._run.stop()
@@ -1116,6 +1127,20 @@ class NeptuneCallback(TrainerCallback):
         if state and hasattr(state, 'trial_params') and state.trial_params is not None:
             self._metadata_namespace['trial_params'] = state.trial_params
 
+    def _log_model_checkpoint(self, path: str):
+        self._metadata_namespace[self._target_checkpoints_namespace].upload_files(path)
+
+        if self._should_clean_recently_uploaded_checkpoint and self._recent_checkpoint_path is not None:
+            self._metadata_namespace[self._target_checkpoints_namespace].delete_files(self._recent_checkpoint_path)
+
+        self._recent_checkpoint_path = path
+
+    def on_init_end(self, args, state, control, **kwargs):
+        if self._log_checkpoints == 'best':
+            # TODO: NPT-12189 - Update the assertion about required arguments
+            assert args.load_best_model_at_end, "To use best model checkpoint saving load_best_model_at_end needs to " \
+                                                "be enabled "
+
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         if not state.is_world_process_zero:
             return
@@ -1136,6 +1161,22 @@ class NeptuneCallback(TrainerCallback):
 
     def __del__(self):
         self._stop_run_if_exists()
+
+    def on_save(self, args, state, control, **kwargs):
+        if self._should_upload_checkpoint:
+            checkpoint_path = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
+            self._log_model_checkpoint(checkpoint_path)
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        best_metric_name = args.metric_for_best_model
+        if not best_metric_name.startswith("eval_"):
+            best_metric_name = f"eval_{best_metric_name}"
+
+        metric_value = metrics.get(best_metric_name)
+
+        operator = np.greater if args.greater_is_better else np.less
+
+        self._should_upload_checkpoint = state.best_metric is None or operator(metric_value, state.best_metric)
 
     @classmethod
     def get_run(cls, trainer):
