@@ -1168,15 +1168,16 @@ class NeptuneCallback(TrainerCallback):
             self._log_model_checkpoint(checkpoint_path)
 
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
-        best_metric_name = args.metric_for_best_model
-        if not best_metric_name.startswith("eval_"):
-            best_metric_name = f"eval_{best_metric_name}"
+        if self._log_checkpoints == 'best':
+            best_metric_name = args.metric_for_best_model
+            if not best_metric_name.startswith("eval_"):
+                best_metric_name = f"eval_{best_metric_name}"
 
-        metric_value = metrics.get(best_metric_name)
+            metric_value = metrics.get(best_metric_name)
 
-        operator = np.greater if args.greater_is_better else np.less
+            operator = np.greater if args.greater_is_better else np.less
 
-        self._should_upload_checkpoint = state.best_metric is None or operator(metric_value, state.best_metric)
+            self._should_upload_checkpoint = state.best_metric is None or operator(metric_value, state.best_metric)
 
     @classmethod
     def get_run(cls, trainer):
