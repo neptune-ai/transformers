@@ -1062,9 +1062,10 @@ class NeptuneCallback(TrainerCallback):
         # TODO: NPT-12189 Update the exception
         raise Exception("Trainer has any NeptuneCallback configured")
 
-    def on_log(self, args, state, control, logs: Dict[str, float] = None, **kwargs):
-        for k, v in logs.items():
-            self.run[k].log(v)
+    def on_log(self, args, state, control, logs: Optional[Dict[str, float]] = None, **kwargs):
+        if logs:
+            for k, v in logs.items():
+                self.run[k].log(v)
 
 
 class CodeCarbonCallback(TrainerCallback):
