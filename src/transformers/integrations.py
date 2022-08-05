@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Optional, Dict, TYPE_CHECKING
 
 from .utils import flatten_dict, is_datasets_available, logging
+from . import __version__ as version
 
 
 logger = logging.get_logger(__name__)
@@ -978,6 +979,10 @@ class NeptuneCallback(TrainerCallback):
             (with NeptuneCallback or environment variables).
             """)
 
+    INTEGRATION_VERSION_KEY = "source_code/integrations/transformers"
+    MODEL_PARAMETERS_KEY = "model_parameters"
+    TRAINER_PARAMETERS_KEY = "trainer_parameters"
+
     def __init__(
         self, 
         *,
@@ -1007,12 +1012,13 @@ class NeptuneCallback(TrainerCallback):
         verify_type('log_parameters', log_parameters, bool)
         verify_type('log_checkpoints', log_checkpoints, (str, type(None)))
 
-        self._base_namespace = base_namespace
+        self._base_namespace_path = base_namespace
         self._log_parameters = log_parameters
         self._log_checkpoints = log_checkpoints
         self._initial_run: Optional[Run] = run
+
         self._run: Optional[Run] = None
-        
+        self._should_reinitialize = False
         self._init_run_kwargs = {
             'api_token': api_token,
             'project': project,
@@ -1026,7 +1032,7 @@ class NeptuneCallback(TrainerCallback):
             del self._run
             self._run = None
 
-    def _initialize_run(self):
+    def _reinitialize_run(self):
         if self._initial_run is not None:
             self._run = self._initial_run
             self._initial_run = None
@@ -1044,14 +1050,35 @@ class NeptuneCallback(TrainerCallback):
     @property
     def run(self):
         if self._run is None:
-            self._initialize_run()
+            self._reinitialize_run()
         return self._run
 
     def __del__(self):
         self._stop_run_if_exists()
 
+    @property
+    def _metadata_namespace(self):
+        return self.run[self._base_namespace_path]
+
+    def _log_integration_version(self):
+        self.run[NeptuneCallback.INTEGRATION_VERSION_KEY] = version
+
+    def _log_trainer_parameters(self, args):
+        self._metadata_namespace[NeptuneCallback.TRAINER_PARAMETERS_KEY] = args.to_sanitized_dict()
+
+    def _log_model_parameters(self, model):
+        if model and hasattr(model, "config") and model.config is not None:
+            self._metadata_namespace[NeptuneCallback.MODEL_PARAMETERS_KEY] = model.config.to_dict()
+
     def on_train_begin(self, args, state, control, model=None, **kwargs):
-        self._initialize_run()
+        if self._should_reinitialize:
+            self._reinitialize_run()
+        self._should_reinitialize = True
+
+        self._log_integration_version()
+        if self._log_parameters:
+            self._log_trainer_parameters(args)
+            self._log_model_parameters(model)
 
     @classmethod
     def get_run(cls, trainer):
@@ -1064,8 +1091,9 @@ class NeptuneCallback(TrainerCallback):
 
     def on_log(self, args, state, control, logs: Optional[Dict[str, float]] = None, **kwargs):
         if logs:
-            for k, v in logs.items():
-                self.run[k].log(v)
+            for name, value in rewrite_logs(logs).items():
+                if isinstance(value, (int, float)):
+                    self._metadata_namespace[name].log(value, step=state.global_step)
 
 
 class CodeCarbonCallback(TrainerCallback):
