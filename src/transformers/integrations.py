@@ -979,6 +979,10 @@ class NeptuneCallback(TrainerCallback):
             (with NeptuneCallback or environment variables).
             """)
 
+    INTEGRATION_VERSION_KEY = "source_code/integrations/transformers"
+    MODEL_PARAMETERS_KEY = "model_parameters"
+    TRAINER_PARAMETERS_KEY = "trainer_parameters"
+
     def __init__(
         self, 
         *,
@@ -1057,14 +1061,14 @@ class NeptuneCallback(TrainerCallback):
         return self.run[self._base_namespace_path]
 
     def _log_integration_version(self):
-        self.run["source_code/integrations/transformers"] = version
+        self.run[NeptuneCallback.INTEGRATION_VERSION_KEY] = version
 
     def _log_trainer_parameters(self, args):
-        self._metadata_namespace["trainer_parameters"] = args.to_sanitized_dict()
+        self._metadata_namespace[NeptuneCallback.TRAINER_PARAMETERS_KEY] = args.to_sanitized_dict()
 
     def _log_model_parameters(self, model):
         if model and hasattr(model, "config") and model.config is not None:
-            self._metadata_namespace["model_parameters"] = model.config.to_dict()
+            self._metadata_namespace[NeptuneCallback.MODEL_PARAMETERS_KEY] = model.config.to_dict()
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         if self._should_reinitialize:
