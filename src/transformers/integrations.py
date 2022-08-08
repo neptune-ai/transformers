@@ -1184,8 +1184,11 @@ class NeptuneCallback(TrainerCallback):
     def __del__(self):
         self._stop_run_if_exists()
 
+        if self._volatile_checkpoints_dir is not None:
+            shutil.rmtree(self._volatile_checkpoints_dir, ignore_errors=True)
+
     def on_save(self, args, state, control, **kwargs):
-        if self._should_upload_checkpoint:
+        if self._should_upload_checkpoint is not None:
             self._log_model_checkpoint(args.output_dir, f"checkpoint-{state.global_step}")
 
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
