@@ -933,15 +933,15 @@ class NeptuneCallback(TrainerCallback):
     """
     TODO: NPT-12189 - Update the docstring
     A [`TrainerCallback`] that sends the logs to [Neptune](https://neptune.ai).
-   
+
     Args:
-        api_token ('str', *optional*): 
+        api_token ('str', *optional*):
             Neptune API token obtained from <https://neptune.ai> upon registration.
-            It is recommended to keep it in the `NEPTUNE_API_TOKEN` environment variable 
+            It is recommended to keep it in the `NEPTUNE_API_TOKEN` environment variable
             -- in this case it does not have to be provided here.
-            Read more in the 
+            Read more in the
             `Neptune installation docs <https://docs.neptune.ai/getting-started/installation>`_.
-        project (`str`, *optional*): 
+        project (`str`, *optional*):
             Name of the project. Format: "WORKSPACE/PROJECT".
             If `None` (default), the value of `NEPTUNE_PROJECT` environment variable will be used.
             You need to create the project in <https://neptune.ai> first.
@@ -950,36 +950,39 @@ class NeptuneCallback(TrainerCallback):
         base_namespace (`str`, *optional*, defaults to "finetuning"):
             Root namespace within Neptune's run.
         log_parameters (`bool`, *optional*, defaults to True):
-            If True, log all trainer arguments and model parameters provided by the trainer. 
+            If True, log all trainer arguments and model parameters provided by the trainer.
         log_checkpoints (`str`, *optional*, defaults to "best"):
             If "same", upload checkpoints whenever they are saved by the trainer.
-            If "best", upload the best checkpoint (among the ones saved by the trainer, 
-            chosen at the end of the training) 
+            If "best", upload the best checkpoint (among the ones saved by the trainer,
+            chosen at the end of the training)
             Otherwise, do not upload checkpoints.
         run (`Run`, *optional*):
             Pass Neptune run object if you want to continue logging to the existing run (e.g., resume a run).
-            Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_. 
+            Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
             When run object is passed you can't specify other neptune properties.
         **neptune_run_kwargs (*optional*):
-            Additional keyword arguments to be passed directly 
-            to the `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function 
-            when a new run is created. 
+            Additional keyword arguments to be passed directly
+            to the `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function
+            when a new run is created.
             Note that `**neptune_run_kwargs` are passed down to `neptune.init()` only if run is not provided.
     """
+
     if TYPE_CHECKING and is_neptune_available():
         from neptune.new.metadata_containers.run import Run
 
     class MissingConfiguration(Exception):
         def __init__(self):
             # TODO: NPT-12189 - Update the exception
-            super().__init__("""
+            super().__init__(
+                """
             ------ Unsupported ----
             We were not able to create new Runs.
             You provided custom Neptune Run with `run` argument to `NeptuneCallback`.
             In order of getting integration fully operational
             You should provide `api_token` and `project`
             (with NeptuneCallback or environment variables).
-            """)
+            """
+            )
 
     INTEGRATION_VERSION_KEY = "source_code/integrations/transformers"
     MODEL_PARAMETERS_KEY = "model_parameters"
@@ -988,7 +991,7 @@ class NeptuneCallback(TrainerCallback):
     TRAINER_PARAMETERS_KEY = "trainer_parameters"
 
     def __init__(
-        self, 
+        self,
         *,
         api_token: Optional[str] = None,
         project: Optional[str] = None,
@@ -1008,13 +1011,13 @@ class NeptuneCallback(TrainerCallback):
         from neptune.new.metadata_containers.run import Run
         from neptune.new.internal.utils import verify_type
 
-        verify_type('api_token', api_token, (str, type(None)))
-        verify_type('project', project, (str, type(None)))
-        verify_type('name', name, (str, type(None)))
-        verify_type('base_namespace', base_namespace, str)
-        verify_type('run', run, (Run, type(None)))
-        verify_type('log_parameters', log_parameters, bool)
-        verify_type('log_checkpoints', log_checkpoints, (str, type(None)))
+        verify_type("api_token", api_token, (str, type(None)))
+        verify_type("project", project, (str, type(None)))
+        verify_type("name", name, (str, type(None)))
+        verify_type("base_namespace", base_namespace, str)
+        verify_type("run", run, (Run, type(None)))
+        verify_type("log_parameters", log_parameters, bool)
+        verify_type("log_checkpoints", log_checkpoints, (str, type(None)))
 
         self._base_namespace_path = base_namespace
         self._log_parameters = log_parameters
@@ -1025,12 +1028,7 @@ class NeptuneCallback(TrainerCallback):
         self._is_monitoring_run = False
         self._run_id = None
         self._force_reset_monitoring_run = False
-        self._init_run_kwargs = {
-            'api_token': api_token,
-            'project': project,
-            'name': name,
-            **neptune_run_kwargs
-        }
+        self._init_run_kwargs = {"api_token": api_token, "project": project, "name": name, **neptune_run_kwargs}
 
     def _stop_run_if_exists(self):
         if self._run:
@@ -1046,7 +1044,7 @@ class NeptuneCallback(TrainerCallback):
 
         try:
             self._run = init_run(**self._init_run_kwargs, **additional_neptune_kwargs)
-            self._run_id = self._run['sys/id'].fetch()
+            self._run_id = self._run["sys/id"].fetch()
         except (NeptuneMissingProjectNameException, NeptuneMissingApiTokenException) as e:
             raise NeptuneCallback.MissingConfiguration() from e
 
@@ -1054,7 +1052,7 @@ class NeptuneCallback(TrainerCallback):
         if self._initial_run is not None:
             self._run = self._initial_run
             self._is_monitoring_run = True
-            self._run_id = self._run['sys/id'].fetch()
+            self._run_id = self._run["sys/id"].fetch()
             self._initial_run = None
         else:
             if not self._force_reset_monitoring_run and self._is_monitoring_run:
@@ -1072,7 +1070,7 @@ class NeptuneCallback(TrainerCallback):
             self._should_reset_monitoring_run = False
             self._run = self._initial_run
             self._initial_run = None
-            self._run_id = self._run['sys/id'].fetch()
+            self._run_id = self._run["sys/id"].fetch()
         else:
             if not self._run:
                 self._initialize_run(
@@ -1080,7 +1078,7 @@ class NeptuneCallback(TrainerCallback):
                     capture_stdout=False,
                     capture_stderr=False,
                     capture_hardware_metrics=False,
-                    capture_traceback=False
+                    capture_traceback=False,
                 )
                 self._is_monitoring_run = False
 
@@ -1105,10 +1103,10 @@ class NeptuneCallback(TrainerCallback):
             self._metadata_namespace[NeptuneCallback.MODEL_PARAMETERS_KEY] = model.config.to_dict()
 
     def _log_hyper_param_search_parameters(self, state):
-        if state and hasattr(state, 'trial_name'):
+        if state and hasattr(state, "trial_name"):
             self._metadata_namespace[NeptuneCallback.TRIAL_NAME_KEY] = state.trial_name
 
-        if state and hasattr(state, 'trial_params') and state.trial_params is not None:
+        if state and hasattr(state, "trial_params") and state.trial_params is not None:
             self._metadata_namespace[NeptuneCallback.TRIAL_PARAMS_KEY] = state.trial_params
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
