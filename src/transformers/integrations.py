@@ -1151,9 +1151,12 @@ class NeptuneCallback(TrainerCallback):
             return
 
         if logs:
-            for name, value in rewrite_logs(logs).items():
-                if isinstance(value, (int, float)):
-                    self._metadata_namespace[name].log(value, step=state.global_step)
+            if 'train_runtime' in logs:
+                self._metadata_namespace.assign(logs)
+            else:
+                for name, value in rewrite_logs(logs).items():
+                    if isinstance(value, (int, float)):
+                        self._metadata_namespace[name].log(value, step=state.global_step)
 
 
 class CodeCarbonCallback(TrainerCallback):
