@@ -1018,7 +1018,7 @@ class NeptuneCallback(TrainerCallback):
         self._initial_run: Optional[Run] = run
 
         self._run: Optional[Run] = None
-        self._is_monitoring_run = True
+        self._is_monitoring_run = False
         self._run_id = None
         self._force_reset_monitoring_run = False
         self._init_run_kwargs = {
@@ -1049,6 +1049,7 @@ class NeptuneCallback(TrainerCallback):
     def _ensure_run_with_monitoring(self):
         if self._initial_run is not None:
             self._run = self._initial_run
+            self._is_monitoring_run = True
             self._run_id = self._run['sys/id'].fetch()
             self._initial_run = None
         else:
@@ -1099,6 +1100,13 @@ class NeptuneCallback(TrainerCallback):
         if model and hasattr(model, "config") and model.config is not None:
             self._metadata_namespace[NeptuneCallback.MODEL_PARAMETERS_KEY] = model.config.to_dict()
 
+    def _log_hyper_param_search_parameters(self, state):
+        if state and hasattr(state, 'trial_name'):
+            self._metadata_namespace['trial'] = state.trial_name
+
+        if state and hasattr(state, 'trial_params') and state.trial_params is not None:
+            self._metadata_namespace['trial_params'] = state.trial_params
+
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         self._ensure_run_with_monitoring()
         self._force_reset_monitoring_run = True
@@ -1107,6 +1115,9 @@ class NeptuneCallback(TrainerCallback):
         if self._log_parameters:
             self._log_trainer_parameters(args)
             self._log_model_parameters(model)
+
+        if state.is_hyper_param_search:
+            self._log_hyper_param_search_parameters(state)
 
     def on_train_end(self, args, state, control, **kwargs):
         self._stop_run_if_exists()
