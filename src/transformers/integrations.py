@@ -1108,6 +1108,9 @@ class NeptuneCallback(TrainerCallback):
             self._metadata_namespace['trial_params'] = state.trial_params
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
+        if not state.is_world_process_zero:
+            return
+
         self._ensure_run_with_monitoring()
         self._force_reset_monitoring_run = True
 
@@ -1135,6 +1138,9 @@ class NeptuneCallback(TrainerCallback):
         raise Exception("Trainer has any NeptuneCallback configured")
 
     def on_log(self, args, state, control, logs: Optional[Dict[str, float]] = None, **kwargs):
+        if not state.is_world_process_zero:
+            return
+
         if logs:
             for name, value in rewrite_logs(logs).items():
                 if isinstance(value, (int, float)):
