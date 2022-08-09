@@ -1035,11 +1035,12 @@ class NeptuneCallback(TrainerCallback):
         self._should_upload_checkpoint = self._log_checkpoints is not None
         self._recent_checkpoint_path = None
 
-        self._target_checkpoints_namespace = 'checkpoints'
-        self._should_clean_recently_uploaded_checkpoint = False
         if self._log_checkpoints in {'last', 'best'}:
             self._target_checkpoints_namespace = f'checkpoints/{self._log_checkpoints}'
             self._should_clean_recently_uploaded_checkpoint = True
+        else:
+            self._target_checkpoints_namespace = 'checkpoints'
+            self._should_clean_recently_uploaded_checkpoint = False
 
     def _stop_run_if_exists(self):
         if self._run:
