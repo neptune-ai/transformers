@@ -983,6 +983,8 @@ class NeptuneCallback(TrainerCallback):
 
     INTEGRATION_VERSION_KEY = "source_code/integrations/transformers"
     MODEL_PARAMETERS_KEY = "model_parameters"
+    TRIAL_NAME_KEY = "trial"
+    TRIAL_PARAMS_KEY = "trial_params"
     TRAINER_PARAMETERS_KEY = "trainer_parameters"
 
     def __init__(
@@ -1104,17 +1106,10 @@ class NeptuneCallback(TrainerCallback):
 
     def _log_hyper_param_search_parameters(self, state):
         if state and hasattr(state, 'trial_name'):
-            self._metadata_namespace['trial'] = state.trial_name
+            self._metadata_namespace[NeptuneCallback.TRIAL_NAME_KEY] = state.trial_name
 
         if state and hasattr(state, 'trial_params') and state.trial_params is not None:
-            self._metadata_namespace['trial_params'] = state.trial_params
-
-    def _log_hyper_param_search_parameters(self, state):
-        if state and hasattr(state, 'trial_name'):
-            self._metadata_namespace['trial'] = state.trial_name
-
-        if state and hasattr(state, 'trial_params') and state.trial_params is not None:
-            self._metadata_namespace['trial_params'] = state.trial_params
+            self._metadata_namespace[NeptuneCallback.TRIAL_PARAMS_KEY] = state.trial_params
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         if not state.is_world_process_zero:
@@ -1150,7 +1145,7 @@ class NeptuneCallback(TrainerCallback):
         if not state.is_world_process_zero:
             return
 
-        if logs:
+        if logs is not None:
             for name, value in rewrite_logs(logs).items():
                 if isinstance(value, (int, float)):
                     self._metadata_namespace[name].log(value, step=state.global_step)
