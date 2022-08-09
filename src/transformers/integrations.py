@@ -1018,7 +1018,9 @@ class NeptuneCallback(TrainerCallback):
         self._initial_run: Optional[Run] = run
 
         self._run: Optional[Run] = None
-        self._should_reinitialize = False
+        self._is_monitoring_run = True
+        self._run_id = None
+        self._force_reset_monitoring_run = False
         self._init_run_kwargs = {
             'api_token': api_token,
             'project': project,
@@ -1032,29 +1034,56 @@ class NeptuneCallback(TrainerCallback):
             del self._run
             self._run = None
 
-    def _reinitialize_run(self):
+    def _initialize_run(self, **additional_neptune_kwargs):
+        from neptune.new import init_run
+        from neptune.new.exceptions import NeptuneMissingProjectNameException, NeptuneMissingApiTokenException
+
+        self._stop_run_if_exists()
+
+        try:
+            self._run = init_run(**self._init_run_kwargs, **additional_neptune_kwargs)
+            self._run_id = self._run['sys/id'].fetch()
+        except (NeptuneMissingProjectNameException, NeptuneMissingApiTokenException) as e:
+            raise NeptuneCallback.MissingConfiguration() from e
+
+    def _ensure_run_with_monitoring(self):
         if self._initial_run is not None:
             self._run = self._initial_run
+            self._run_id = self._run['sys/id'].fetch()
             self._initial_run = None
         else:
-            from neptune.new import init_run
-            from neptune.new.exceptions import NeptuneMissingProjectNameException, NeptuneMissingApiTokenException
+            if not self._force_reset_monitoring_run and self._is_monitoring_run:
+                return
 
-            self._stop_run_if_exists()
+            if self._run and not self._is_monitoring_run and not self._force_reset_monitoring_run:
+                self._initialize_run(run=self._run_id)
+                self._is_monitoring_run = True
+            else:
+                self._initialize_run()
+                self._force_reset_monitoring_run = False
 
-            try:
-                self._run = init_run(**self._init_run_kwargs)
-            except (NeptuneMissingProjectNameException, NeptuneMissingApiTokenException) as e:
-                raise NeptuneCallback.MissingConfiguration() from e
+    def _ensure_at_least_run_without_monitoring(self):
+        if self._initial_run is not None:
+            self._should_reset_monitoring_run = False
+            self._run = self._initial_run
+            self._initial_run = None
+            self._run_id = self._run['sys/id'].fetch()
+        else:
+            if not self._run:
+                self._initialize_run(
+                    run=self._run_id,
+                    capture_stdout=False,
+                    capture_stderr=False,
+                    capture_hardware_metrics=False,
+                    capture_traceback=False
+                )
+                self._is_monitoring_run = False
 
     @property
     def run(self):
         if self._run is None:
-            self._reinitialize_run()
+            self._ensure_at_least_run_without_monitoring()
         return self._run
-
-    def __del__(self):
-        self._stop_run_if_exists()
 
     @property
     def _metadata_namespace(self):
@@ -1071,14 +1100,19 @@ class NeptuneCallback(TrainerCallback):
             self._metadata_namespace[NeptuneCallback.MODEL_PARAMETERS_KEY] = model.config.to_dict()
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
-        if self._should_reinitialize:
-            self._reinitialize_run()
-        self._should_reinitialize = True
+        self._ensure_run_with_monitoring()
+        self._force_reset_monitoring_run = True
 
         self._log_integration_version()
         if self._log_parameters:
             self._log_trainer_parameters(args)
             self._log_model_parameters(model)
+
+    def on_train_end(self, args, state, control, **kwargs):
+        self._stop_run_if_exists()
+
+    def __del__(self):
+        self._stop_run_if_exists()
 
     @classmethod
     def get_run(cls, trainer):
