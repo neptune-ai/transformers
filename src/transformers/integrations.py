@@ -451,6 +451,8 @@ def get_available_reporting_integrations():
         integrations.append("comet_ml")
     if is_mlflow_available():
         integrations.append("mlflow")
+    if is_neptune_available():
+        integrations.append("neptune")
     if is_tensorboard_available():
         integrations.append("tensorboard")
     if is_wandb_available():
@@ -1099,6 +1101,13 @@ class NeptuneCallback(TrainerCallback):
     def _log_model_parameters(self, model):
         if model and hasattr(model, "config") and model.config is not None:
             self._metadata_namespace[NeptuneCallback.MODEL_PARAMETERS_KEY] = model.config.to_dict()
+
+    def _log_hyper_param_search_parameters(self, state):
+        if state and hasattr(state, 'trial_name'):
+            self._metadata_namespace['trial'] = state.trial_name
+
+        if state and hasattr(state, 'trial_params') and state.trial_params is not None:
+            self._metadata_namespace['trial_params'] = state.trial_params
 
     def _log_hyper_param_search_parameters(self, state):
         if state and hasattr(state, 'trial_name'):
