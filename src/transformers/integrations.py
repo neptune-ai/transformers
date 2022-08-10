@@ -1132,8 +1132,9 @@ class NeptuneCallback(TrainerCallback):
     def on_init_end(self, args, state, control, **kwargs):
         if self._log_checkpoints == 'best':
             # TODO: NPT-12189 - Update the assertion about required arguments
-            assert args.load_best_model_at_end, "To use best model checkpoint saving load_best_model_at_end needs to " \
-                                                "be enabled "
+            raise ValueError(
+                "To use best model checkpoint saving load_best_model_at_end needs to be enabled"
+            )
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         if not state.is_world_process_zero:
