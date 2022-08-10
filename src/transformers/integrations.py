@@ -1147,7 +1147,7 @@ class NeptuneCallback(TrainerCallback):
 
     def on_init_end(self, args, state, control, **kwargs):
         self._volatile_checkpoints_dir = None
-        if self._log_checkpoints is not None and (args.overwrite_output_dir or args.save_total_limit is not None):
+        if self._log_checkpoints and (args.overwrite_output_dir or args.save_total_limit is not None):
             self._volatile_checkpoints_dir = tempfile.TemporaryDirectory().name
 
         if self._log_checkpoints == 'best' and not args.load_best_model_at_end:
@@ -1181,7 +1181,7 @@ class NeptuneCallback(TrainerCallback):
             shutil.rmtree(self._volatile_checkpoints_dir, ignore_errors=True)
 
     def on_save(self, args, state, control, **kwargs):
-        if self._should_upload_checkpoint is not None:
+        if self._should_upload_checkpoint:
             self._log_model_checkpoint(args.output_dir, f"checkpoint-{state.global_step}")
 
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
