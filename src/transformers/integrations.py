@@ -1130,7 +1130,7 @@ class NeptuneCallback(TrainerCallback):
         self._recent_checkpoint_path = path
 
     def on_init_end(self, args, state, control, **kwargs):
-        if self._log_checkpoints == 'best':
+        if self._log_checkpoints == 'best' and not args.load_best_model_at_end:
             # TODO: NPT-12189 - Update the assertion about required arguments
             raise ValueError(
                 "To use best model checkpoint saving load_best_model_at_end needs to be enabled"
