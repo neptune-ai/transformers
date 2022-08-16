@@ -989,6 +989,7 @@ class NeptuneCallback(TrainerCallback):
     TRIAL_NAME_KEY = "trial"
     TRIAL_PARAMS_KEY = "trial_params"
     TRAINER_PARAMETERS_KEY = "trainer_parameters"
+    FLAT_METRICS = {'train/epoch'}
 
     def __init__(
         self,
@@ -1144,11 +1145,11 @@ class NeptuneCallback(TrainerCallback):
             return
 
         if logs is not None:
-            if 'train_runtime' in logs:
-                self._metadata_namespace.assign(logs)
-            else:
-                for name, value in rewrite_logs(logs).items():
-                    if isinstance(value, (int, float)):
+            for name, value in rewrite_logs(logs).items():
+                if isinstance(value, (int, float)):
+                    if name in NeptuneCallback.FLAT_METRICS:
+                        self._metadata_namespace[name] = value
+                    else:
                         self._metadata_namespace[name].log(value, step=state.global_step)
 
 
