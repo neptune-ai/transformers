@@ -933,7 +933,6 @@ class MLflowCallback(TrainerCallback):
 
 class NeptuneCallback(TrainerCallback):
     """TrainerCallback that sends the logs to [Neptune](https://neptune.ai).
-    TODO: NPT-12189 - Update the docstring
 
     Args:
         api_token (`str`, optional):
@@ -950,20 +949,19 @@ class NeptuneCallback(TrainerCallback):
             Root namespace within the Neptune run.
         log_parameters (`bool`, optional, defaults to True):
             If True, logs all trainer arguments and model parameters provided by the trainer.
-        log_checkpoints (`str`, optional, defaults to "best"):
-            If "same", upload checkpoints whenever they are saved by the trainer.
-            If "best", upload the best checkpoint (among the ones saved by the trainer,
-                chosen at the end of the training).
-            Otherwise, do not upload checkpoints.
+        log_checkpoints (`str`, optional, defaults to "same"):
+            If "same", uploads checkpoints whenever they are saved by the trainer.
+            If "last", uploads only the most recently saved checkpoint.
+            If "best", uploads the best checkpoint (among the ones saved by the trainer,
+            chosen at the end of the training).
+            If None, does not upload checkpoints.
         run (`Run`, optional):
             Pass a Neptune run object if you want to continue logging to an existing run.
             Read more about resuming runs in the [docs](https://docs.neptune.ai/how-to-guides/neptune-api/resume-run).
-            When run object is passed, you can't specify other Neptune properties.
         **neptune_run_kwargs (optional):
             Additional keyword arguments to be passed directly
             to the [neptune.init_run()](https://docs.neptune.ai/api-reference/neptune#.init_run) function
             when a new run is created.
-            Note that `**neptune_run_kwargs` are passed to `neptune.init()` only if a `run` argument is not provided.
     """
 
     if TYPE_CHECKING and is_neptune_available():
@@ -971,7 +969,6 @@ class NeptuneCallback(TrainerCallback):
 
     class MissingConfiguration(Exception):
         def __init__(self):
-            # TODO: NPT-12189 - Update the exception
             super().__init__(
                 """
             ------ Unsupported ----
@@ -1002,7 +999,6 @@ class NeptuneCallback(TrainerCallback):
         **neptune_run_kwargs
     ):
         if not is_neptune_available():
-            # TODO: NPT-12189 - Update the exception
             raise ValueError(
                 "NeptuneCallback requires the Neptune client library to be installed. "
                 "To install the library, run `pip install neptune-client`."
@@ -1132,7 +1128,6 @@ class NeptuneCallback(TrainerCallback):
 
     def on_init_end(self, args, state, control, **kwargs):
         if self._log_checkpoints == "best" and not args.load_best_model_at_end:
-            # TODO: NPT-12189 - Update the assertion about required arguments
             raise ValueError("To save the best model checkpoint, the load_best_model_at_end argument must be enabled.")
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
@@ -1179,7 +1174,6 @@ class NeptuneCallback(TrainerCallback):
             if isinstance(callback, cls):
                 return callback.run
 
-        # TODO: NPT-12189 Update the exception
         raise Exception("The trainer doesn't have a NeptuneCallback configured.")
 
     def on_log(self, args, state, control, logs: Optional[Dict[str, float]] = None, **kwargs):
