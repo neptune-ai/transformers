@@ -198,7 +198,7 @@ You can easily log and monitor your runs code. The following are currently suppo
 * [TensorBoard](https://www.tensorflow.org/tensorboard)
 * [Weights & Biases](https://docs.wandb.ai/integrations/huggingface)
 * [Comet ML](https://www.comet.ml/docs/python-sdk/huggingface/)
-* [Neptune](https://docs.neptune.ai/integrations-and-supported-tools/model-training/huggingface)
+* [Neptune](https://docs.neptune.ai)
 
 ### Weights & Biases
 
@@ -253,7 +253,6 @@ or if in a Conda environment:
 conda install -c comet_ml -c anaconda -c conda-forge comet_ml
 ```
 
-
 ### Neptune
 
 1. Install the Neptune client library:
@@ -278,7 +277,7 @@ conda install -c comet_ml -c anaconda -c conda-forge comet_ml
 
 1. Enable Neptune logging in your script:
 
-    1. Create a Neptune callback and pass it to the Trainer:
+    - Create a Neptune callback and pass it to the Trainer:
 
         ```python
         callback = NeptuneCallback()
@@ -289,7 +288,7 @@ conda install -c comet_ml -c anaconda -c conda-forge comet_ml
         )
         ```
 
-    1. Alternatively, in your `TrainingArguments`, set the `report_to` argument to `"neptune"`:
+    - Alternatively, in your `TrainingArguments`, set the `report_to` argument to `"neptune"`:
 
         ```python
         training_args = TrainingArguments(
@@ -305,9 +304,13 @@ conda install -c comet_ml -c anaconda -c conda-forge comet_ml
         )
         ```
 
+1. When you start the training with `trainer.train()`, your metadata will be logged in Neptune.
+
 You can pass your **Neptune API token** and **project name** when creating the callback, but the recommended way is to save them as environment variables:
 
 | Environment variable | Value                                                |
 | :------------------- | :--------------------------------------------------- |
 | `NEPTUNE_API_TOKEN`  | Your Neptune API token. To find and copy it, click your Neptune avatar and select **Get your API token**. |
 | `NEPTUNE_PROJECT` | The full name of your Neptune project (`workspace-name/project-name`). To find and copy it, head to **project settings** &rarr; **Properties**. |
+
+For detailed instructions and examples, see the [Neptune docs](https://docs.neptune.ai).
