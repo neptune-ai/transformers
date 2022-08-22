@@ -15,13 +15,12 @@ limitations under the License.
 
 # Examples
 
-This folder contains actively maintained examples of use of 🤗 Transformers using the PyTorch backend, organized along NLP tasks.
+This folder contains actively maintained examples of use of 🤗 Transformers using the PyTorch backend, organized by ML task.
 
 ## The Big Table of Tasks
 
 Here is the list of all our examples:
-- with information on whether they are **built on top of `Trainer`** (if not, they still work, they might
-  just lack some features).
+- with information on whether they are **built on top of `Trainer`** (if not, they still work, they might just lack some features).
 - whether or not they have a version using the [🤗 Accelerate](https://github.com/huggingface/accelerate) library.
 - whether or not they leverage the [🤗 Datasets](https://github.com/huggingface/datasets) library.
 - links to **Colab notebooks** to walk through the scripts and run them easily.
