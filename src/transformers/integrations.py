@@ -1002,7 +1002,7 @@ class NeptuneCallback(TrainerCallback):
         base_namespace: str = "finetuning",
         run: Optional["Run"] = None,
         log_parameters: bool = True,
-        log_checkpoints: Optional[str] = "same",
+        log_checkpoints: Optional[str] = None,
         **neptune_run_kwargs
     ):
         if not is_neptune_available():
