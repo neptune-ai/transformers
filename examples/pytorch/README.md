@@ -277,18 +277,7 @@ conda install -c comet_ml -c anaconda -c conda-forge comet_ml
 
 1. Enable Neptune logging in your script:
 
-    - Create a Neptune callback and pass it to the Trainer:
-
-        ```python
-        callback = NeptuneCallback()
-        trainer = Trainer(
-            model,
-            ...
-            callbacks=[callback],
-        )
-        ```
-
-    - Alternatively, in your `TrainingArguments`, set the `report_to` argument to `"neptune"`:
+    - In your `TrainingArguments`, set the `report_to` argument to `"neptune"`:
 
         ```python
         training_args = TrainingArguments(
@@ -303,10 +292,43 @@ conda install -c comet_ml -c anaconda -c conda-forge comet_ml
             ...
         )
         ```
+    
+    - Alternatively, for more logging options, create a Neptune callback:
+
+        ```python
+        neptune_callback = NeptuneCallback()
+        ```
+
+        To add more detail to the tracked run, you can supply optional arguments to `NeptuneCallback`.
+
+        Some examples:
+
+        ```python
+        neptune_callback = NeptuneCallback(
+            name = "DistilBERT",
+            description = "DistilBERT fine-tuned on GLUE/MRPC",
+            tags = ["args-callback", "fine-tune", "MRPC"],  # tags help you manage runs in Neptune
+            base_namespace="callback",  # the default is "finetuning"
+            log_checkpoints = "best",  # other options are "last", "same", and None
+            capture_hardware_metrics = False,  # additional keyword arguments for a Neptune run
+        )
+        ```
+
+        Pass the callback to the Trainer:
+
+        ```python
+        training_args = TrainingArguments(..., report_to = None)
+        trainer = Trainer(
+            model,
+            training_args,
+            ...,
+            callbacks=[neptune_callback],
+        )
+        ```
 
 1. When you start the training with `trainer.train()`, your metadata will be logged in Neptune.
 
-You can pass your **Neptune API token** and **project name** when creating the callback, but the recommended way is to save them as environment variables:
+Although you can pass your **Neptune API token** and **project name** as arguments when creating the callback, the recommended way is to save them as environment variables:
 
 | Environment variable | Value                                                |
 | :------------------- | :--------------------------------------------------- |
