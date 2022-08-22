@@ -943,17 +943,15 @@ class NeptuneCallback(TrainerCallback):
             Name of an existing Neptune project, in the form: "workspace-name/project-name".
             You can find and copy the name from the project Settings -> Properties in Neptune.
             If None (default), the value of the `NEPTUNE_PROJECT` environment variable will be used.
-        name (`str`, optional):
-            Custom name for the run. It is shown in the Neptune app and stored in the "sys/name" field.
-        base_namespace (`str`, optional, defaults to "finetuning"):
-            Root namespace within the Neptune run.
+        name (`str`, optional): Custom name for the run.
+        base_namespace (`str`, optional, defaults to "finetuning"): In the Neptune run, the root namespace
+            that will contain all of the logged metadata.
         log_parameters (`bool`, optional, defaults to True):
-            If True, logs all trainer arguments and model parameters provided by the trainer.
+            If True, logs all Trainer arguments and model parameters provided by the Trainer.
         log_checkpoints (`str`, optional, defaults to "same"):
-            If "same", uploads checkpoints whenever they are saved by the trainer.
+            If "same", uploads checkpoints whenever they are saved by the Trainer.
             If "last", uploads only the most recently saved checkpoint.
-            If "best", uploads the best checkpoint (among the ones saved by the trainer,
-            chosen at the end of the training).
+            If "best", uploads the best checkpoint (among the ones saved by the Trainer).
             If None, does not upload checkpoints.
         run (`Run`, optional):
             Pass a Neptune run object if you want to continue logging to an existing run.
