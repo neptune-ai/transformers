@@ -1012,7 +1012,10 @@ class NeptuneCallback(TrainerCallback):
             )
 
         from neptune.new.metadata_containers.run import Run
-        from neptune.new.internal.utils import verify_type
+        try:
+            from neptune.new.integrations.utils import verify_type
+        except ImportError:
+            from neptune.new.internal.utils import verify_type
 
         verify_type("api_token", api_token, (str, type(None)))
         verify_type("project", project, (str, type(None)))
