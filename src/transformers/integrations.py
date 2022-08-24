@@ -22,12 +22,12 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np
 
-from .utils import flatten_dict, is_datasets_available, logging
 from . import __version__ as version
+from .utils import flatten_dict, is_datasets_available, logging
 
 
 logger = logging.get_logger(__name__)
@@ -932,41 +932,34 @@ class MLflowCallback(TrainerCallback):
 
 
 class NeptuneCallback(TrainerCallback):
-    """
-    TODO: NPT-12189 - Update the docstring
-    A [`TrainerCallback`] that sends the logs to [Neptune](https://neptune.ai).
+    """TrainerCallback that sends the logs to [Neptune](https://neptune.ai).
 
     Args:
-        api_token ('str', *optional*):
-            Neptune API token obtained from <https://neptune.ai> upon registration.
-            It is recommended to keep it in the `NEPTUNE_API_TOKEN` environment variable
-            -- in this case it does not have to be provided here.
-            Read more in the
-            `Neptune installation docs <https://docs.neptune.ai/getting-started/installation>`_.
-        project (`str`, *optional*):
-            Name of the project. Format: "WORKSPACE/PROJECT".
-            If `None` (default), the value of `NEPTUNE_PROJECT` environment variable will be used.
-            You need to create the project in <https://neptune.ai> first.
-        name (`str`, *optional*):
-            Name of the run, it appears in the "all metadata/sys" section in Neptune UI.
-        base_namespace (`str`, *optional*, defaults to "finetuning"):
-            Root namespace within Neptune's run.
-        log_parameters (`bool`, *optional*, defaults to True):
-            If True, log all trainer arguments and model parameters provided by the trainer.
-        log_checkpoints (`str`, *optional*, defaults to "best"):
-            If "same", upload checkpoints whenever they are saved by the trainer.
-            If "best", upload the best checkpoint (among the ones saved by the trainer,
-            chosen at the end of the training)
-            Otherwise, do not upload checkpoints.
-        run (`Run`, *optional*):
-            Pass Neptune run object if you want to continue logging to the existing run (e.g., resume a run).
-            Read more about it `here <https://docs.neptune.ai/how-to-guides/neptune-api/resume-run>`_.
-            When run object is passed you can't specify other neptune properties.
-        **neptune_run_kwargs (*optional*):
+        api_token (`str`, optional):
+            Neptune API token obtained upon registration. You can leave this argument out if you have
+            saved your token to the `NEPTUNE_API_TOKEN` environment variable (strongly recommended).
+            See full setup instructions in the [docs](https://docs.neptune.ai/getting-started/installation).
+        project (`str`, optional):
+            Name of an existing Neptune project, in the form: "workspace-name/project-name".
+            You can find and copy the name from the project Settings -> Properties in Neptune.
+            If None (default), the value of the `NEPTUNE_PROJECT` environment variable will be used.
+        name (`str`, optional): Custom name for the run.
+        base_namespace (`str`, optional, defaults to "finetuning"): In the Neptune run, the root namespace
+            that will contain all of the logged metadata.
+        log_parameters (`bool`, optional, defaults to True):
+            If True, logs all Trainer arguments and model parameters provided by the Trainer.
+        log_checkpoints (`str`, optional, defaults to None):
+            If "same", uploads checkpoints whenever they are saved by the Trainer.
+            If "last", uploads only the most recently saved checkpoint.
+            If "best", uploads the best checkpoint (among the ones saved by the Trainer).
+            If None, does not upload checkpoints.
+        run (`Run`, optional):
+            Pass a Neptune run object if you want to continue logging to an existing run.
+            Read more about resuming runs in the [docs](https://docs.neptune.ai/how-to-guides/neptune-api/resume-run).
+        **neptune_run_kwargs (optional):
             Additional keyword arguments to be passed directly
-            to the `neptune.init() <https://docs.neptune.ai/api-reference/neptune#init>`_ function
+            to the [neptune.init_run()](https://docs.neptune.ai/api-reference/neptune#.init_run) function
             when a new run is created.
-            Note that `**neptune_run_kwargs` are passed down to `neptune.init()` only if run is not provided.
     """
 
     if TYPE_CHECKING and is_neptune_available():
@@ -974,15 +967,13 @@ class NeptuneCallback(TrainerCallback):
 
     class MissingConfiguration(Exception):
         def __init__(self):
-            # TODO: NPT-12189 - Update the exception
             super().__init__(
                 """
             ------ Unsupported ----
-            We were not able to create new Runs.
-            You provided custom Neptune Run with `run` argument to `NeptuneCallback`.
-            In order of getting integration fully operational
-            You should provide `api_token` and `project`
-            (with NeptuneCallback or environment variables).
+            We were not able to create new runs.
+            You provided a custom Neptune run to `NeptuneCallback` with the `run` argument.
+            For the integration to work fully, provide your `api_token` and `project`
+            by saving them as environment variables or passing them to the callback.
             """
             )
 
@@ -991,7 +982,7 @@ class NeptuneCallback(TrainerCallback):
     TRIAL_NAME_KEY = "trial"
     TRIAL_PARAMS_KEY = "trial_params"
     TRAINER_PARAMETERS_KEY = "trainer_parameters"
-    FLAT_METRICS = {'train/epoch'}
+    FLAT_METRICS = {"train/epoch"}
 
     def __init__(
         self,
@@ -1006,16 +997,16 @@ class NeptuneCallback(TrainerCallback):
         **neptune_run_kwargs
     ):
         if not is_neptune_available():
-            # TODO: NPT-12189 - Update the exception
             raise ValueError(
-                "NeptuneCallback requires neptune-client to be installed. Run `pip install neptune-client`."
+                "NeptuneCallback requires the Neptune client library to be installed. "
+                "To install the library, run `pip install neptune-client`."
             )
-
-        from neptune.new.metadata_containers.run import Run
+            
         try:
             from neptune.new.integrations.utils import verify_type
         except ImportError:
             from neptune.new.internal.utils import verify_type
+        from neptune.new.metadata_containers.run import Run
 
         verify_type("api_token", api_token, (str, type(None)))
         verify_type("project", project, (str, type(None)))
@@ -1039,11 +1030,11 @@ class NeptuneCallback(TrainerCallback):
         self._should_upload_checkpoint = self._log_checkpoints is not None
         self._recent_checkpoint_path = None
 
-        if self._log_checkpoints in {'last', 'best'}:
-            self._target_checkpoints_namespace = f'checkpoints/{self._log_checkpoints}'
+        if self._log_checkpoints in {"last", "best"}:
+            self._target_checkpoints_namespace = f"checkpoints/{self._log_checkpoints}"
             self._should_clean_recently_uploaded_checkpoint = True
         else:
-            self._target_checkpoints_namespace = 'checkpoints'
+            self._target_checkpoints_namespace = "checkpoints"
             self._should_clean_recently_uploaded_checkpoint = False
 
     def _stop_run_if_exists(self):
@@ -1054,7 +1045,7 @@ class NeptuneCallback(TrainerCallback):
 
     def _initialize_run(self, **additional_neptune_kwargs):
         from neptune.new import init_run
-        from neptune.new.exceptions import NeptuneMissingProjectNameException, NeptuneMissingApiTokenException
+        from neptune.new.exceptions import NeptuneMissingApiTokenException, NeptuneMissingProjectNameException
 
         self._stop_run_if_exists()
 
@@ -1134,11 +1125,8 @@ class NeptuneCallback(TrainerCallback):
         self._recent_checkpoint_path = path
 
     def on_init_end(self, args, state, control, **kwargs):
-        if self._log_checkpoints == 'best' and not args.load_best_model_at_end:
-            # TODO: NPT-12189 - Update the assertion about required arguments
-            raise ValueError(
-                "To use best model checkpoint saving load_best_model_at_end needs to be enabled"
-            )
+        if self._log_checkpoints == "best" and not args.load_best_model_at_end:
+            raise ValueError("To save the best model checkpoint, the load_best_model_at_end argument must be enabled.")
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         if not state.is_world_process_zero:
@@ -1167,7 +1155,7 @@ class NeptuneCallback(TrainerCallback):
             self._log_model_checkpoint(checkpoint_path)
 
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
-        if self._log_checkpoints == 'best':
+        if self._log_checkpoints == "best":
             best_metric_name = args.metric_for_best_model
             if not best_metric_name.startswith("eval_"):
                 best_metric_name = f"eval_{best_metric_name}"
@@ -1184,8 +1172,7 @@ class NeptuneCallback(TrainerCallback):
             if isinstance(callback, cls):
                 return callback.run
 
-        # TODO: NPT-12189 Update the exception
-        raise Exception("Trainer has any NeptuneCallback configured")
+        raise Exception("The trainer doesn't have a NeptuneCallback configured.")
 
     def on_log(self, args, state, control, logs: Optional[Dict[str, float]] = None, **kwargs):
         if not state.is_world_process_zero:
