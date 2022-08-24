@@ -948,7 +948,7 @@ class NeptuneCallback(TrainerCallback):
             that will contain all of the logged metadata.
         log_parameters (`bool`, optional, defaults to True):
             If True, logs all Trainer arguments and model parameters provided by the Trainer.
-        log_checkpoints (`str`, optional, defaults to "same"):
+        log_checkpoints (`str`, optional, defaults to None):
             If "same", uploads checkpoints whenever they are saved by the Trainer.
             If "last", uploads only the most recently saved checkpoint.
             If "best", uploads the best checkpoint (among the ones saved by the Trainer).
@@ -982,7 +982,7 @@ class NeptuneCallback(TrainerCallback):
     TRIAL_NAME_KEY = "trial"
     TRIAL_PARAMS_KEY = "trial_params"
     TRAINER_PARAMETERS_KEY = "trainer_parameters"
-    FLAT_METRICS = {'train/epoch'}
+    FLAT_METRICS = {"train/epoch"}
 
     def __init__(
         self,
