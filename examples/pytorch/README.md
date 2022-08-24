@@ -1,4 +1,3 @@
-# TODO: NPT-12189
 <!---
 Copyright 2020 The HuggingFace Team. All rights reserved.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,11 +20,10 @@ This folder contains actively maintained examples of use of 🤗 Transformers us
 ## The Big Table of Tasks
 
 Here is the list of all our examples:
-- with information on whether they are **built on top of `Trainer`** (if not, they still work, they might
-  just lack some features),
+- with information on whether they are **built on top of `Trainer`** (if not, they still work, they might just lack some features).
 - whether or not they have a version using the [🤗 Accelerate](https://github.com/huggingface/accelerate) library.
 - whether or not they leverage the [🤗 Datasets](https://github.com/huggingface/datasets) library.
-- links to **Colab notebooks** to walk through the scripts and run them easily,
+- links to **Colab notebooks** to walk through the scripts and run them easily.
 <!--
 Coming soon!
 - links to **Cloud deployments** to be able to deploy large-scale trainings in the Cloud with little to no setup.
@@ -199,6 +197,7 @@ You can easily log and monitor your runs code. The following are currently suppo
 * [TensorBoard](https://www.tensorflow.org/tensorboard)
 * [Weights & Biases](https://docs.wandb.ai/integrations/huggingface)
 * [Comet ML](https://www.comet.ml/docs/python-sdk/huggingface/)
+* [Neptune](https://docs.neptune.ai/integrations-and-supported-tools/model-training/huggingface)
 
 ### Weights & Biases
 
@@ -252,3 +251,87 @@ or if in a Conda environment:
 ```bash
 conda install -c comet_ml -c anaconda -c conda-forge comet_ml
 ```
+
+### Neptune
+
+1. Install the Neptune client library:
+
+    pip:
+
+    ```bash
+    pip install neptune-client
+    ```
+
+    conda:
+
+    ```bash
+    conda install -c conda-forge neptune-client
+    ```
+
+1. Import `NeptuneCallback`:
+
+    ```python
+    from transformers.integrations import NeptuneCallback
+    ```
+
+1. Enable Neptune logging in your script:
+
+    - In your `TrainingArguments`, set the `report_to` argument to `"neptune"`:
+
+        ```python
+        training_args = TrainingArguments(
+            "quick-training-distilbert-mrpc", 
+            evaluation_strategy="steps",
+            eval_steps = 20,
+            report_to = "neptune",
+        )
+        trainer = Trainer(
+            model,
+            training_args,
+            ...
+        )
+        ```
+    
+    - Alternatively, for more logging options, create a Neptune callback:
+
+        ```python
+        neptune_callback = NeptuneCallback()
+        ```
+
+        To add more detail to the tracked run, you can supply optional arguments to `NeptuneCallback`.
+
+        Some examples:
+
+        ```python
+        neptune_callback = NeptuneCallback(
+            name = "DistilBERT",
+            description = "DistilBERT fine-tuned on GLUE/MRPC",
+            tags = ["args-callback", "fine-tune", "MRPC"],  # tags help you manage runs in Neptune
+            base_namespace="callback",  # the default is "finetuning"
+            log_checkpoints = "best",  # other options are "last", "same", and None
+            capture_hardware_metrics = False,  # additional keyword arguments for a Neptune run
+        )
+        ```
+
+        Pass the callback to the Trainer:
+
+        ```python
+        training_args = TrainingArguments(..., report_to = None)
+        trainer = Trainer(
+            model,
+            training_args,
+            ...,
+            callbacks=[neptune_callback],
+        )
+        ```
+
+1. When you start the training with `trainer.train()`, your metadata will be logged in Neptune.
+
+Although you can pass your **Neptune API token** and **project name** as arguments when creating the callback, the recommended way is to save them as environment variables:
+
+| Environment variable | Value                                                |
+| :------------------- | :--------------------------------------------------- |
+| `NEPTUNE_API_TOKEN`  | Your Neptune API token. To find and copy it, click your Neptune avatar and select **Get your API token**. |
+| `NEPTUNE_PROJECT` | The full name of your Neptune project (`workspace-name/project-name`). To find and copy it, head to **project settings** &rarr; **Properties**. |
+
+For detailed instructions and examples, see the [Neptune docs](https://docs.neptune.ai/integrations-and-supported-tools/model-training/huggingface).
