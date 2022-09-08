@@ -1991,7 +1991,7 @@ class TFLEDDecoder(tf.keras.layers.Layer):
                 Contains precomputed key and value hidden-states of the attention blocks. Can be used to speed up
                 decoding. If `past_key_values` are used, the user can optionally input only the last
                 `decoder_input_ids` (those that don't have their past key value states given to this model) of shape
-                `(batch_size, 1)` instead of all ``decoder_input_ids``` of shape `(batch_size, sequence_length)`.
+                `(batch_size, 1)` instead of all `decoder_input_ids` of shape `(batch_size, sequence_length)`.
                 inputs_embeds (`tf.Tensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
                 Optionally, instead of passing `input_ids` you can choose to directly pass an embedded representation.
                 This is useful if you want more control over how to convert `input_ids` indices into associated vectors
@@ -2316,6 +2316,24 @@ class TFLEDModel(TFLEDPreTrainedModel):
         )
 
 
+# Copied from transformers.models.bart.modeling_tf_bart.BiasLayer
+class BiasLayer(tf.keras.layers.Layer):
+    """
+    Bias as a layer. It is used for serialization purposes: `tf.keras.Model.save_weights` stores on a per-layer basis,
+    so all weights have to be registered in a layer.
+    """
+
+    def __init__(self, shape, initializer, trainable, name, **kwargs):
+        super().__init__(name=name, **kwargs)
+        # Note: the name of this variable will NOT be scoped when serialized, i.e. it will not be in the format of
+        # "outer_layer/inner_layer/.../name:0". Instead, it will be "name:0". For further details, see:
+        # https://github.com/huggingface/transformers/pull/18833#issuecomment-1233090214
+        self.bias = self.add_weight(name=name, shape=shape, initializer=initializer, trainable=trainable)
+
+    def call(self, x):
+        return x + self.bias
+
+
 @add_start_docstrings(
     "The LED Model with a language modeling head. Can be used for summarization.",
     LED_START_DOCSTRING,
@@ -2331,9 +2349,10 @@ class TFLEDForConditionalGeneration(TFLEDPreTrainedModel):
         self.led = TFLEDMainLayer(config, name="led")
         self.use_cache = config.use_cache
         # final_bias_logits is registered as a buffer in pytorch, so not trainable for the sake of consistency.
-        self.final_logits_bias = self.add_weight(
+        self.bias_layer = BiasLayer(
             name="final_logits_bias", shape=[1, config.vocab_size], initializer="zeros", trainable=False
         )
+        self.final_logits_bias = self.bias_layer.bias  # alias to keep the same interface with PT
         # TODO (Joao): investigate why LED has numerical issues in XLA generate
         self.supports_xla_generation = False
 
@@ -2423,7 +2442,7 @@ class TFLEDForConditionalGeneration(TFLEDPreTrainedModel):
             training=training,
         )
         lm_logits = self.led.shared(outputs[0], mode="linear")
-        lm_logits = lm_logits + self.final_logits_bias
+        lm_logits = self.bias_layer(lm_logits)
         masked_lm_loss = None if labels is None else self.hf_compute_loss(labels, lm_logits)
 
         if not return_dict:
